@@ -1,0 +1,181 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<p><img src="./api/img/easyrtc.png" title="EasyRTC" alt="EasyRTC" /></p>
+<h1 id="easyrtc">EasyRTC</h1>
+<p><strong>A bundle of Open Source WebRTC joy!</strong></p>
+<p>Priologic's EasyRTC, a bundle of Open Source WebRTC joy, incorporates an EasyRTC server install and client API, and working, HTML5 and JavaScript, application source code under a BSD 2 license.</p>
+<h2 id="features">Features</h2>
+<ul>
+<li>Install EasyRTC's WebRTC Server on your own Linux, Windows, or Mac server in minutes not days.</li>
+<li>Use our EasyRTC API and sample application code to build and deploy your WebRTC app in hours not weeks.</li>
+<li>EasyRTC is completely free and open source under a BSD 2 license. No usage costs or other hidden fees.</li>
+</ul>
+<h2 id="installation-in-a-nutshell">Installation In A Nutshell</h2>
+<ol>
+<li>Install <a href="http://nodejs.org">Node.js</a></li>
+<li>Download the EasyRTC distribution from github (<a href="https://github.com/priologic/easyrtc.git" class="uri">https://github.com/priologic/easyrtc.git</a>)</li>
+<li>Run <code>npm install</code> in the easyrtc directory.</li>
+<li>Enter the easyrtc/server_example directory by executing <code>cd server_example</code></li>
+<li>Run <code>npm install</code> in the server_example directory.</li>
+<li>Start EasyRTC by running <code>node server.js</code> while in the server_example directory.</li>
+<li>Browse the examples using a WebRTC enabled browser. <em>(defaults to port <code>8080</code>)</em></li>
+</ol>
+<p>Important note: Chrome will not grant access to local microphones or cameras for a page served using http except for the localhost case. See the docs/easyrtc_server_ssl.md file for instructions on serving files using https.</p>
+<p>Step by step instructions including additional setup options can be found in <code>/docs/easyrtc_server_install.md</code></p>
+<p>Note: there is no corresponding need to install the client files specifically; they were installed as part of EasyRTC in step 3.</p>
+<h2 id="documentation">Documentation</h2>
+<p>All documentation can be found within <a href="./docs/">the docs folder</a>.</p>
+<p><strong>EasyRTC Server</strong></p>
+<ul>
+<li><a href="./docs/easyrtc_server_install.md">Install instructions for Ubuntu, Windows, and Mac</a>
+<ul>
+<li><code>/docs/easyrtc_server_install.md</code></li>
+</ul></li>
+<li><a href="./docs/easyrtc_server_configuration.md">Configuration options</a>
+<ul>
+<li><code>/docs/easyrtc_server_configuration.md</code></li>
+</ul></li>
+<li><a href="./docs/easyrtc_server_events.md">Using Server Events</a>
+<ul>
+<li><code>/docs/easyrtc_server_events.md</code><br />
+</li>
+</ul></li>
+<li>Server API
+<ul>
+<li><code>/docs/server_html_docs/index.html</code></li>
+</ul></li>
+</ul>
+<p><strong>EasyRTC Client API</strong></p>
+<ul>
+<li><a href="./docs/easyrtc_client_tutorial.md">Client API tutorial</a>
+<ul>
+<li><code>/docs/easyrtc_client_tutorial.md</code></li>
+</ul></li>
+<li>Client API
+<ul>
+<li><code>/docs/client_html_docs/easyrtc.html</code></li>
+</ul></li>
+<li>Client File Transfer API
+<ul>
+<li><code>/docs/client_html_docs/easyrtc_ft.html</code></li>
+</ul></li>
+</ul>
+<p><strong>General Development</strong></p>
+<ul>
+<li><a href="./docs/easyrtc_faq.md">Frequently asked questions</a>
+<ul>
+<li><code>/docs/easyrtc_faq.md</code></li>
+</ul></li>
+<li><a href="./docseasyrtc_authentication.md/">Authentication</a>
+<ul>
+<li><code>/docs/easyrtc_authentication.md</code><br />
+</li>
+</ul></li>
+<li><a href="./docs/easyrtc_server_ice.md">ICE, TURN, STUN Configuration</a>
+<ul>
+<li><code>/docs/easyrtc_server_ice.md</code><br />
+</li>
+</ul></li>
+<li><a href="./docs/easyrtc_rooms.md">Using Rooms</a>
+<ul>
+<li><code>/docs/easyrtc_rooms.md</code><br />
+</li>
+</ul></li>
+<li><a href="./docs/easyrtc_server_ssl.md">Serving with SSL</a>
+<ul>
+<li><code>/docs/easyrtc_server_ssl.md</code><br />
+</li>
+</ul></li>
+<li><a href="./docs/easyrtc_with_other_servers.md">Serving next to IIS or Apache</a>
+<ul>
+<li><code>/docs/easyrtc_with_other_servers.md</code><br />
+</li>
+</ul></li>
+<li><a href="./docs/easyrtc_upcoming_features.md">Upcoming features</a>
+<ul>
+<li><code>/docs/easyrtc_upcoming_features.md</code></li>
+</ul></li>
+<li><a href="./docs/easyrtc_webrtc_problems.md">Common WebRTC problems</a>
+<ul>
+<li><code>/docs/easyrtc_webrtc_problems.md</code></li>
+</ul></li>
+<li><a href="./docs/easyrtc_changelog.md">Changelog</a>
+<ul>
+<li><code>/docs/easyrtc_changelog.md</code></li>
+</ul></li>
+</ul>
+<h2 id="folder-structure">Folder Structure</h2>
+<ul>
+<li>/ (root)</li>
+<li>Licenses and package information</li>
+<li>/api/</li>
+<li>Client API files including easyrtc.js<br />
+</li>
+<li>/demos/</li>
+<li>EasyRTC live demos and example code</li>
+<li>/docs/</li>
+<li>Documentation for using the API and running the server</li>
+<li>/lib/</li>
+<li>Required libraries</li>
+<li>/node_modules/</li>
+<li>Required node.js modules</li>
+<li>This folder will be created during the install</li>
+<li>/server_example/</li>
+<li>A simple server example</li>
+</ul>
+<h2 id="included-demos">Included Demos</h2>
+<p>EasyRTC comes with a number of demo's which work immediately after installation.</p>
+<ul>
+<li>Video and/or Audio connections</li>
+<li>Multi-party video chat</li>
+<li>Text Messaging with or without Data Channels</li>
+<li>Screen and tab sharing</li>
+<li>File transfer</li>
+<li>Client side video recording</li>
+</ul>
+<h2 id="links-for-help-and-information">Links for help and information</h2>
+<ul>
+<li>The EasyRTC website is at:</li>
+<li><a href="http://www.easyrtc.com/" class="uri">http://www.easyrtc.com/</a></li>
+<li>Use our support forum is at:</li>
+<li><a href="https://easyrtc.com/forum/" class="uri">https://easyrtc.com/forum/</a></li>
+<li>Live demo site:</li>
+<li><a href="http://demo.easyrtc.com/" class="uri">http://demo.easyrtc.com/</a></li>
+<li>Bugs and requests can be filed on our github page or on the forum:</li>
+<li><a href="https://github.com/priologic/easyrtc/issues" class="uri">https://github.com/priologic/easyrtc/issues</a></li>
+<li>Our YouTube channel has live demo's:</li>
+<li><a href="http://www.youtube.com/user/priologic" class="uri">http://www.youtube.com/user/priologic</a></li>
+<li>Information on complimentary EasyRTC commercial products can be found here:</li>
+<li><a href="https://easyrtc.com/pricing/">Product and support pricing - https://easyrtc.com/pricing/</a></li>
+</ul>
+<h2 id="license">License</h2>
+<p>Copyright (c) 2016, Priologic Software Inc.<br />
+All rights reserved.</p>
+<p>Redistribution and use in source and binary forms, with or without<br />
+modification, are permitted provided that the following conditions are met:</p>
+<pre><code>* Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.</code></pre>
+<p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot;<br />
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE<br />
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE<br />
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE<br />
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR<br />
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF<br />
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS<br />
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN<br />
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)<br />
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE<br />
+POSSIBILITY OF SUCH DAMAGE.</p>
+</body>
+</html>
