@@ -27,6 +27,9 @@ Software Environment Setup Notes
   * git clone git@github.com:priologic/easyrtc.git
 #### 3. Change directory to easyRTC, and follow their installation instructions
   * npm install in a couple of places
+#### 4. Create self signed key and certs
+  * openssl genrsa -out www.devicesmith.com 2048
+  * openssl req -new -x509 -key www.example.com.key -out www.example.com.cert -days 3650 -subj /CN=www.example.com
 
 
 To Do List
