@@ -16,16 +16,16 @@ Major inspiration and ideas came from:
 
 Software Environment Setup Notes
 ---------------------------------
-1. Install NodeJS, v6
+#### 1. Install NodeJS, v6
   * Linux:
     * curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
     * sudo apt-get install -y nodejs
     * check with node -v. Should say v6.10.0 or greater
   * Windows:
     * Use installer from nodejs.org
-2. Clone EasyRTC
+#### 2. Clone EasyRTC
   * git clone git@github.com:priologic/easyrtc.git
-3. Change directory to easyRTC, and follow their installation instructions
+#### 3. Change directory to easyRTC, and follow their installation instructions
   * npm install in a couple of places
 
 
