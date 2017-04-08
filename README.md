@@ -28,16 +28,28 @@ Software Environment Setup Notes
 #### 3. Change directory to easyRTC, and follow their installation instructions
   * npm install in a couple of places
 #### 4. Create self signed key and certs
-  * openssl genrsa -out www.devicesmith.com 2048
-  * openssl req -new -x509 -key www.example.com.key -out www.example.com.cert -days 3650 -subj /CN=www.example.com
+  * In the directory tpp/server, create a key and cert.
+  * openssl genrsa -out domain.key 2048
+  * openssl req -new -x509 -key domain.key -out domain.crt -days 3650 -subj /CN=www.example.com
 
-
+Running
+---------------------------------
+*  Remote Robot
+  * Run server
+    * cd server
+    * node server_ssl.js
+  * Open the Chrome browser and navigate to https://localhost:8443/remote.html
+* Client computer
+  * open Chrome to https://<ip of remote>:8443
+  * Connect using the connect to button on the lower right corner.
+  
+  
 To Do List
 ----------
-- [ ] Add instructions on creating certs to README.md.
-- [ ] Figure out CSS to arrange the web page the way I want it.
+- [X] Add instructions on creating certs to README.md.
+- [X] Figure out CSS to arrange the web page the way I want it.
 - [ ] Incorporate virtual joystick for control of camera, motors, etc.
-- [ ] Figure out if possible to set name instead of using the randomly generated name.
+- [X] Figure out if possible to set name instead of using the randomly generated name.
 - [ ] Get the serial port working via nodejs.
 - [ ] Write code for controlling servos.
 - [ ] Write code for controlling motors.
