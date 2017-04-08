@@ -25,6 +25,7 @@ Software Environment Setup Notes
     * Use installer from nodejs.org
 #### 2. Clone EasyRTC
   * git clone git@github.com:priologic/easyrtc.git
+  * put it at the same directory level as this tpp code.
 #### 3. Change directory to easyRTC, and follow their installation instructions
   * npm install in a couple of places
 #### 4. Create self signed key and certs
@@ -34,15 +35,20 @@ Software Environment Setup Notes
 
 Running
 ---------------------------------
-*  Remote Robot
+* On Remote Robot
   * Run server
     * cd server
     * node server_ssl.js
   * Open the Chrome browser and navigate to https://localhost:8443/remote.html
-* Client computer
-  * open Chrome to https://<ip of remote>:8443
+* On Client computer
+  * open Chrome to https://ip.of.remote.com:8443
   * Connect using the connect to button on the lower right corner.
   
+Caviots, Assumptions, Limitations
+----------------------------------
+* Only works when computers are on the same network. 
+  * I don't want to deal with the complexities of that yet.
+
   
 To Do List
 ----------
@@ -53,3 +59,5 @@ To Do List
 - [ ] Get the serial port working via nodejs.
 - [ ] Write code for controlling servos.
 - [ ] Write code for controlling motors.
+- [ ] Set default remote name to something like "remote_bot"
+- [ ] Implement disconnect on client side.
