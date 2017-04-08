@@ -1,18 +1,74 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>EasyRTC - Server Root</title>
-    <script type="text/javascript">
-        function forward(){ window.location = "/demos/";}
-    </script>
-</head>
-<body onload="setTimeout('forward()', 10000)">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> <!--skip-->
+    <title>TPP</title>
+    <link rel="stylesheet" type="text/css" href="/easyrtc/easyrtc.css" />
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript" src="/easyrtc/easyrtc.js"></script>
+    <script type="text/javascript" src="js/tpp_logic.js"></script> 
 
-    <h2>This is your server's Web Root</h2>
+    <style>
+      body {
+         margin: 40px;
+      }
 
-    <p>This is the easiest location to put your own static html files for developing WebRTC applications.</p>
+      .wrapper {
+         display: grid;
+         grid-gap: 3px;
+         grid-template-columns: repeat(5, 1fr);
+         background-color: #fff;
+         color: #444;
+      }
 
-    <p><a href="./demo_audio_video_simple.html">Simple Video and Audio Demo</a>...</p>
+      .box {
+         background-color: #444;
+	 color: #fff;
+	 border-radius: 5px;
+	 padding: 10px;
+	 font-size: 150%;
+      }
 
-</body>
+      .a {
+         grid-column: 1/5;
+         grid-row: 1/5;
+      }
+      .b {
+         grid-column: 5 ;
+         grid-row: 1;
+      }
+      .c {
+         grid-column: 5 ;
+         grid-row: 2 ;
+      }
+      .d {
+         grid-column: 5;
+         grid-row: 3;
+      }
+      .e {
+         grid-column: 5;
+         grid-row: 4;
+      }
+    </style>
+    
+  </head>
+  <body onload="connect();">
+    <div class="wrapper">
+      <div class="box a">
+        <video id="callerVideo" autoplay="autoplay" width="100%"></video>
+      </div>
+      <div class="box b">
+        <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
+      </div>
+      <div class="box c">C</div>
+      <div class="box d">D</div>
+      <div class="box e" id="connectControls">
+        E
+        <div id="iam">Not yet connected...</div>
+        <br />
+        <strong>Connect to:</strong>
+        <div id="otherClients"></div>
+      </div>
+    </div>
+  </body>
 </html>
