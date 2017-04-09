@@ -118,3 +118,57 @@ function getParameterByName(name, url) {
 }
 
 
+// VirtualJoystick Worker
+function virtualJoyStickWorker(xstart, ystart) {
+    console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
+    
+    var joystick1	= new VirtualJoystick({
+        container	: document.getElementById('container1'),
+        mouseSupport	: true,
+        strokeStyle     : "#888888",
+        limitStickTravel: true,
+	stickRadius	: 50,
+        stationaryBase  : true,
+        baseX           : xstart,
+        baseY           : ystart,
+    });
+    
+    var joystick2	= new VirtualJoystick({
+        container	: document.getElementById('container2'),
+        mouseSupport	: true,
+        //limitStickTravel: true,
+	//stickRadius	: 100
+    });
+
+    // joystick1.addEventListener('touchStart', function(){
+    //     console.log('down')
+    // })
+    // joystick1.addEventListener('touchEnd', function(){
+    //     console.log('up')
+    // })
+    
+    setInterval(function(){
+        var output1	= document.getElementById('result1');
+        output1.innerHTML	= '<b>Result1:</b> '
+            + ' dx:'+joystick1.deltaX()
+            + ' dy:'+joystick1.deltaY()
+            + (joystick1.right()	? ' right'	: '')
+            + (joystick1.up()	? ' up'		: '')
+            + (joystick1.left()	? ' left'	: '')
+            + (joystick1.down()	? ' down' 	: '');
+        
+        // var output2	= document.getElementById('result2');
+        // output2.innerHTML	= '<b>Result2:</b> '
+        //     + ' dx:'+joystick2.deltaX()
+        //     + ' dy:'+joystick2.deltaY();
+
+    }, 1/30 * 1000);
+}
+
+// See http://marcj.github.io/css-element-queries/
+function updateSize() {
+    var szx = document.getElementById("container1").clientWidth;
+    var szy = document.getElementById("container1").clientHeight;
+    var res = document.getElementById('result2');
+    res.innerHTML = '<b>X,Y: ' + szx + ',' + szy;
+}

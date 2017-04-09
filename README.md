@@ -24,7 +24,7 @@ Software Environment Setup Notes
   * Windows:
     * Use installer from nodejs.org
 #### 2. Clone EasyRTC
-  * git clone git@github.com:priologic/easyrtc.git
+  * git clone https://github.com/priologic/easyrtc.git
   * put it at the same directory level as this tpp code.
 #### 3. Change directory to easyRTC, and follow their installation instructions
   * npm install in a couple of places
