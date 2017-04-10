@@ -54,8 +54,8 @@ To Do List
 ----------
 - [X] Add instructions on creating certs to README.md.
 - [X] Figure out CSS to arrange the web page the way I want it.
-- [ ] Get WebRTC data channel plumbed and working.
-- [ ] Incorporate virtual joystick for control of camera, motors, etc.
+- [X] Get WebRTC data channel plumbed and working.
+- [X] Incorporate virtual joystick for control of camera, motors, etc.
 - [X] Figure out if possible to set name instead of using the randomly generated name.
 - [ ] Get the serial port working via nodejs.
 - [ ] Write code for controlling servos.
