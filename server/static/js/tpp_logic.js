@@ -1,5 +1,12 @@
 var selfEasyrtcid = "";
 var username = "";
+var gControl =
+    {
+        username: "",
+        selfId: "",
+        otherId: "",
+        hasDataConnection: false,
+    };
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
     var video = document.getElementById('callerVideo');
@@ -11,10 +18,30 @@ easyrtc.setOnStreamClosed( function (callerEasyrtcid) {
 });
 
 function connect() {
-    username = getParameterByName('username');
-    console.log("Username:" + username);
+    //    username = getParameterByName('username');
+    gControl.username = getParameterByName('username');
+    console.log("Username:" + gControl.username);
 
-    easyrtc.setUsername(username);
+    easyrtc.setUsername(gControl.username);
+
+    easyrtc.enableDataChannels(true);
+    
+    easyrtc.setDataChannelOpenListener(
+        function(sourceEasyrtcid) {
+            console.log("data channel is open from " + sourceEasyrtcid);
+            gControl.otherId = sourceEasyrtcid;
+            gControl.hasDataConnection = true;
+
+            easyrtc.setPeerListener(receivePeerMessage);
+        }
+    );
+    easyrtc.setDataChannelCloseListener(
+        function(sourceEasyrtcid) {
+            console.log("data channel is closed");
+            gControl.otherId = "";
+            gControl.hasDataConnection = false;
+        }
+    );
 
     easyrtc.setVideoDims(640,480);
     easyrtc.setRoomOccupantListener(convertListToButtons);
@@ -100,11 +127,27 @@ function loginSuccess(easyrtcid) {
     document.getElementById("iam").innerHTML = "I am " + easyrtc.idToName(easyrtcid);
 }
 
-
 function loginFailure(errorCode, message) {
     easyrtc.showError(errorCode, message);
 }
 
+function receivePeerMessage(sendersEasyRTCId, msgType, msgData)
+{
+    if( msgType == 'js1' )
+    {
+        var output1 = document.getElementById('result1');
+        output1.innerHTML	= '<b>Result1:</b> ' + msgData.x + ", " + msgData.y;
+    }
+}
+
+function sendPeerMessage(targetEasyRTCId, msgType, msgData)
+{
+    easyrtc.sendDataP2P(targetEasyRTCId, msgType, msgData);
+}
+
+//
+// Utility Functions
+//
 function getParameterByName(name, url) {
     if (!url) {
       url = window.location.href;
@@ -117,8 +160,9 @@ function getParameterByName(name, url) {
     return decodeURIComponent(results[2].replace(/\+/g, " "));
 }
 
-
+//
 // VirtualJoystick Worker
+//
 function virtualJoyStickWorker(xstart, ystart) {
     console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
     
@@ -146,8 +190,16 @@ function virtualJoyStickWorker(xstart, ystart) {
     // joystick1.addEventListener('touchEnd', function(){
     //     console.log('up')
     // })
-    
+
     setInterval(function(){
+
+        // only send data if connected
+        if( gControl.hasDataConnection )
+        {
+            var msg = {'x':joystick1.deltaX(), 'y':joystick1.deltaY()};
+            sendPeerMessage(gControl.otherId,'js1', msg);
+        }
+        
         var output1	= document.getElementById('result1');
         output1.innerHTML	= '<b>Result1:</b> '
             + ' dx:'+joystick1.deltaX()
