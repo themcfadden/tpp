@@ -57,6 +57,7 @@ To Do List
 - [X] Get WebRTC data channel plumbed and working.
 - [X] Incorporate virtual joystick for control of camera, motors, etc.
 - [X] Figure out if possible to set name instead of using the randomly generated name.
+- [ ] Implement browser to serial server connection.
 - [ ] Get the serial port working via nodejs.
 - [ ] Write code for controlling servos.
 - [ ] Write code for controlling motors.
