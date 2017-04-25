@@ -53,9 +53,12 @@ Status
 ----------------------------------
 #### 2017-04-24
   Discovered node-pololumaestro. It looks excellent, but
-  unfortunately it hasn't be updated in 3 years.
-  I'll see if I can quickly create a simple driver for the maestro. I
-  don't have the JavaScript/Node skills to update the package.
+  unfortunately it hasn't be updated in 3 years and doesn't install
+  for me.
+  
+  I'll see if I can quickly create a simple driver for the maestro. 
+  
+  I don't have the JavaScript/Node skills to update the package.
 
 To Do List
 ----------
