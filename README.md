@@ -39,9 +39,9 @@ Running
   * Run server
     * cd server
     * node server_ssl.js
-  * Open the Chrome browser and navigate to https://localhost:8443/remote.html
+  * Open the Chrome browser and navigate to https://localhost:8443/robot.html
 * On Client computer
-  * open Chrome to https://ip.of.remote.com:8443
+  * open Chrome to https://ip.of.remote.com:8443/?username=user
   * Connect using the connect to button on the lower right corner.
   
 Caviots, Assumptions, Limitations
@@ -49,7 +49,14 @@ Caviots, Assumptions, Limitations
 * Only works when computers are on the same network. 
   * I don't want to deal with the complexities of that yet.
 
-  
+Status
+----------------------------------
+#### 2017-04-24
+  Discovered node-pololumaestro. It looks excellent, but
+  unfortunately it hasn't be updated in 3 years.
+  I'll see if I can quickly create a simple driver for the maestro. I
+  don't have the JavaScript/Node skills to update the package.
+
 To Do List
 ----------
 - [X] Add instructions on creating certs to README.md.
@@ -57,8 +64,8 @@ To Do List
 - [X] Get WebRTC data channel plumbed and working.
 - [X] Incorporate virtual joystick for control of camera, motors, etc.
 - [X] Figure out if possible to set name instead of using the randomly generated name.
-- [ ] Implement browser to serial server connection.
 - [ ] Get the serial port working via nodejs.
+- [ ] Implement web to serial connection.
 - [ ] Write code for controlling servos.
 - [ ] Write code for controlling motors.
 - [ ] Set default remote name to something like "remote_bot"
