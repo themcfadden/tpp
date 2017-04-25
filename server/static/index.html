@@ -50,34 +50,39 @@
       .d {
          grid-column: 5;
          grid-row: 3;
+         min-height: 128px;
+         min-width:  128px;
+         text-align: center;
       }
       .e {
          grid-column: 5;
          grid-row: 4;
+         min-height: 128px;
+         min-width:  128px;
       }
                 
     </style>
 	</head>
-	<body onload="connect();" onresize="updateSize();">
+	<body onload="connect();">
           
           <div class="wrapper">
-            <div id="container1" class="box a">
+            <div class="box a"  id="container1">
               <video id="callerVideo" autoplay="autoplay" width="100%"></video>
             </div>
             <div class="box b">
               <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
             </div>
-            <div class="box c">
-              <span id="result1"></span>
-            </div>
-            <div class="box d">
-              <span id="result2"></span>
-            </div>
-            <div id="container2" class="box e" id="connectControls">
+            <div class="box c" id="connectControls">
               <div id="iam">Not yet connected...</div>
               <br />
               <strong>Connect to:</strong>
               <div id="otherClients"></div>
+            </div>
+            <div class="box d"  id="container2">
+              <!-- <span id="result1"></span> -->
+            </div>
+            <div class="box e">
+              <span id="result2"></span>
             </div>
           </div>
 
