@@ -6,6 +6,7 @@ var gControl =
         selfId: "",
         otherId: "",
         hasDataConnection: false,
+        joystick1: null
     };
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
@@ -136,8 +137,14 @@ function receivePeerMessage(sendersEasyRTCId, msgType, msgData)
     if( msgType == 'js1' )
     {
         var output1 = document.getElementById('result1');
-        output1.innerHTML	= '<b>Result1:</b> ' + msgData.x + ", " + msgData.y;
+        output1.innerHTML	= '<b>Drive:</b> ' + msgData.x + ", " + msgData.y;
     }
+    if( msgType == 'js2' )
+    {
+        var output1 = document.getElementById('result2');
+        output1.innerHTML	= '<b>Camera:</b> ' + msgData.x + ", " + msgData.y;
+    }
+    
 }
 
 function sendPeerMessage(targetEasyRTCId, msgType, msgData)
@@ -166,22 +173,24 @@ function getParameterByName(name, url) {
 function virtualJoyStickWorker(xstart, ystart) {
     console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
     
-    var joystick1	= new VirtualJoystick({
+    //var joystick1	= new VirtualJoystick({
+    gControl.joystick1	= new VirtualJoystick({
         container	: document.getElementById('container1'),
         mouseSupport	: true,
         strokeStyle     : "#888888",
         limitStickTravel: true,
 	stickRadius	: 50,
-        stationaryBase  : true,
-        baseX           : xstart,
-        baseY           : ystart,
+        stationaryBase  : false,
+        //baseX           : xstart,
+        //baseY           : ystart,
     });
     
-    var joystick2	= new VirtualJoystick({
+    gControl.joystick2	= new VirtualJoystick({
         container	: document.getElementById('container2'),
         mouseSupport	: true,
-        //limitStickTravel: true,
-	//stickRadius	: 100
+        limitStickTravel: true,
+	stickRadius	: 50,
+        stationaryBase  : false
     });
 
     // joystick1.addEventListener('touchStart', function(){
@@ -196,18 +205,21 @@ function virtualJoyStickWorker(xstart, ystart) {
         // only send data if connected
         if( gControl.hasDataConnection )
         {
-            var msg = {'x':joystick1.deltaX(), 'y':joystick1.deltaY()};
+            var msg = {'x':gControl.joystick1.deltaX(), 'y':gControl.joystick1.deltaY()};
             sendPeerMessage(gControl.otherId,'js1', msg);
+
+            var msg2= {'x':gControl.joystick2.deltaX(), 'y':gControl.joystick2.deltaY()};
+            sendPeerMessage(gControl.otherId, 'js2', msg2);
         }
         
         var output1	= document.getElementById('result1');
-        output1.innerHTML	= '<b>Result1:</b> '
-            + ' dx:'+joystick1.deltaX()
-            + ' dy:'+joystick1.deltaY()
-            + (joystick1.right()	? ' right'	: '')
-            + (joystick1.up()	? ' up'		: '')
-            + (joystick1.left()	? ' left'	: '')
-            + (joystick1.down()	? ' down' 	: '');
+        // output1.innerHTML	= '<b>Mouse:</b> '
+        //     + ' dx:'+gControl.joystick1.deltaX()
+        //     + ' dy:'+gControl.joystick1.deltaY()
+        //     + (gControl.joystick1.right()	? ' right'	: '')
+        //     + (gControl.joystick1.up()	? ' up'		: '')
+        //     + (gControl.joystick1.left()	? ' left'	: '')
+        //     + (gControl.joystick1.down()	? ' down' 	: '');
         
         // var output2	= document.getElementById('result2');
         // output2.innerHTML	= '<b>Result2:</b> '
@@ -223,4 +235,5 @@ function updateSize() {
     var szy = document.getElementById("container1").clientHeight;
     var res = document.getElementById('result2');
     res.innerHTML = '<b>X,Y: ' + szx + ',' + szy;
+
 }
