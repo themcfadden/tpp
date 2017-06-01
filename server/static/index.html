@@ -38,6 +38,7 @@
       .a {
          grid-column: 1/5;
          grid-row: 1/5;
+         grid-
       }
       .b {
          grid-column: 5 ;
@@ -60,6 +61,10 @@
          min-height: 128px;
          min-width:  128px;
       }
+      .video {
+      width: 100%;
+      height: auto;
+      }
                 
     </style>
 	</head>
@@ -67,7 +72,7 @@
           
           <div class="wrapper">
             <div class="box a"  id="container1">
-              <video id="callerVideo" autoplay="autoplay" width="100%"></video>
+              <video id="callerVideo" autoplay="autoplay"></video>
             </div>
             <div class="box b">
               <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>

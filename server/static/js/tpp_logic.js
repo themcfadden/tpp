@@ -3,11 +3,11 @@ var username = "";
 var gControl =
     {
         username: "",
-        selfId: "",
-        otherId: "",
         hasDataConnection: false,
-        joystick1: null
+        joystick1: null,
+        joystick2: null
     };
+
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
     var video = document.getElementById('callerVideo');
@@ -19,42 +19,21 @@ easyrtc.setOnStreamClosed( function (callerEasyrtcid) {
 });
 
 function connect() {
-    //    username = getParameterByName('username');
     gControl.username = getParameterByName('username');
     console.log("Username:" + gControl.username);
 
     easyrtc.setUsername(gControl.username);
-
-    easyrtc.enableDataChannels(true);
-    
-    easyrtc.setDataChannelOpenListener(
-        function(sourceEasyrtcid) {
-            console.log("data channel is open from " + sourceEasyrtcid);
-            gControl.otherId = sourceEasyrtcid;
-            gControl.hasDataConnection = true;
-
-            easyrtc.setPeerListener(receivePeerMessage);
-        }
-    );
-    easyrtc.setDataChannelCloseListener(
-        function(sourceEasyrtcid) {
-            console.log("data channel is closed");
-            gControl.otherId = "";
-            gControl.hasDataConnection = false;
-        }
-    );
 
     easyrtc.setVideoDims(640,480);
     easyrtc.setRoomOccupantListener(convertListToButtons);
 
     easyrtc.setAcceptChecker(callAcceptor);
 
-    //easyrtc.easyApp("tpp_webrtc_bot", "selfVideo", ["callerVideo"], loginSuccess, loginFailure);
     easyrtc.initMediaSource(
         function() {
             var selfVideo = document.getElementById("selfVideo");
             easyrtc.setVideoObjectSrc(selfVideo, easyrtc.getLocalStream());
-            easyrtc.connect("tpp_webrtc_bot", loginSuccess, loginFailure);
+            easyrtc.connect("tpp_bot", loginSuccess, loginFailure);
         },
         loginFailure
     );
@@ -105,16 +84,19 @@ function performCall(otherEasyrtcid) {
     var acceptCB = function (accepted, easyrtcid) {
         var n = easyrtc.idToName(easyrtcid);
         console.log("acceptCB: " + accepted + " by " + n);
+        gControl.hasDataConnection = true;
     };
     easyrtc.call(otherEasyrtcid, successCB, failureCB, acceptCB);
 }
 
-
 function callAcceptor(easyrtcid, acceptorCB)
 {
     console.log("checking name");
-    if(easyrtc.idToName(easyrtcid) == 'matt') {
+    if(easyrtc.idToName(easyrtcid) == 'remote') {
+        
         acceptorCB(true);
+        console.log("I am the robot");
+        sendServerMessage('callAccepted', {'who':'remote'});
     }
     else {
         acceptorCB(false);
@@ -132,25 +114,17 @@ function loginFailure(errorCode, message) {
     easyrtc.showError(errorCode, message);
 }
 
-function receivePeerMessage(sendersEasyRTCId, msgType, msgData)
+function sendServerMessage(msgType, msgData)
 {
-    if( msgType == 'js1' )
-    {
-        var output1 = document.getElementById('result1');
-        output1.innerHTML	= '<b>Drive:</b> ' + msgData.x + ", " + msgData.y;
-    }
-    if( msgType == 'js2' )
-    {
-        var output1 = document.getElementById('result2');
-        output1.innerHTML	= '<b>Camera:</b> ' + msgData.x + ", " + msgData.y;
-    }
-    
-}
+    easyrtc.sendServerMessage(msgType, msgData,
+                              function(msgType, msgData){
+                                  //console.log(msgData);
+                              },
+                              function(errorCode, errorText){
+                                  //console.log(errorText);
+                              });
+};
 
-function sendPeerMessage(targetEasyRTCId, msgType, msgData)
-{
-    easyrtc.sendDataP2P(targetEasyRTCId, msgType, msgData);
-}
 
 //
 // Utility Functions
@@ -178,7 +152,8 @@ function virtualJoyStickWorker(xstart, ystart) {
         container	: document.getElementById('container1'),
         mouseSupport	: true,
         strokeStyle     : "#888888",
-        limitStickTravel: true,
+        //limitStickTravel: true,
+        limitStickTravel: false,
 	stickRadius	: 50,
         stationaryBase  : false,
         //baseX           : xstart,
@@ -193,9 +168,9 @@ function virtualJoyStickWorker(xstart, ystart) {
         stationaryBase  : false
     });
 
-    // joystick1.addEventListener('touchStart', function(){
-    //     console.log('down')
-    // })
+    //gControl.joystick1.addEventListener('touchStart', function(){
+    //    console.log('down');
+    //});
     // joystick1.addEventListener('touchEnd', function(){
     //     console.log('up')
     // })
@@ -206,10 +181,10 @@ function virtualJoyStickWorker(xstart, ystart) {
         if( gControl.hasDataConnection )
         {
             var msg = {'x':gControl.joystick1.deltaX(), 'y':gControl.joystick1.deltaY()};
-            sendPeerMessage(gControl.otherId,'js1', msg);
+            sendServerMessage('js1', msg);
 
             var msg2= {'x':gControl.joystick2.deltaX(), 'y':gControl.joystick2.deltaY()};
-            sendPeerMessage(gControl.otherId, 'js2', msg2);
+            sendServerMessage('js2', msg2);
         }
         
         var output1	= document.getElementById('result1');
