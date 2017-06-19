@@ -168,13 +168,6 @@ function virtualJoyStickWorker(xstart, ystart) {
         stationaryBase  : false
     });
 
-    //gControl.joystick1.addEventListener('touchStart', function(){
-    //    console.log('down');
-    //});
-    // joystick1.addEventListener('touchEnd', function(){
-    //     console.log('up')
-    // })
-
     setInterval(function(){
 
         // only send data if connected
@@ -186,21 +179,6 @@ function virtualJoyStickWorker(xstart, ystart) {
             var msg2= {'x':gControl.joystick2.deltaX(), 'y':gControl.joystick2.deltaY()};
             sendServerMessage('js2', msg2);
         }
-        
-        var output1	= document.getElementById('result1');
-        // output1.innerHTML	= '<b>Mouse:</b> '
-        //     + ' dx:'+gControl.joystick1.deltaX()
-        //     + ' dy:'+gControl.joystick1.deltaY()
-        //     + (gControl.joystick1.right()	? ' right'	: '')
-        //     + (gControl.joystick1.up()	? ' up'		: '')
-        //     + (gControl.joystick1.left()	? ' left'	: '')
-        //     + (gControl.joystick1.down()	? ' down' 	: '');
-        
-        // var output2	= document.getElementById('result2');
-        // output2.innerHTML	= '<b>Result2:</b> '
-        //     + ' dx:'+joystick2.deltaX()
-        //     + ' dy:'+joystick2.deltaY();
-
     }, 1/30 * 1000);
 }
 

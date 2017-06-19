@@ -65,8 +65,8 @@ var rtc = easyrtc.listen(app, socketServer, null, function(err, rtcRef) {
 });
 
 
-var comPort = "";
-var botSer;
+var comPort = "COM25";
+var botSerialPort;
 
 
 var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
@@ -82,6 +82,16 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
         next(null);
         break;
     case 'callAccepted':
+        // Add serial port set up here
+        botSerialPort = new SerialPort(comPort,
+                                       {
+                                           baudRate:9600,
+                                           dataBits: 8,
+                                           stopBits: 1,
+                                           parity: 'none'
+                                       });
+        console.log('botSerialPort:', botSerialPort);
+                                           
         console.log('Got a callAccepted', msg.msgData);
         if( msg.msgData.who == 'remote')
             console.log('Remote (the Robot) Connected', msg.msgData);
@@ -103,11 +113,8 @@ function successCB(msgType, msgDate) {
 function failCB(msgType, msgDate) {
     console.log("MattMc-- Got fail msg" + msgType + msgData);
 }
-    
-//io.sockets.on('roomJoin', function(socket) {
-//    console.log("--MattMc: ROOM JOIN");
-//});
-//
+
+
 
 webServer.listen(8433, function () {
     console.log('listening on http://localhost:8443');
