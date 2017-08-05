@@ -32,6 +32,8 @@ Software Environment Setup Notes
   * In the directory tpp/server, create a key and cert.
   * openssl genrsa -out domain.key 2048
   * openssl req -new -x509 -key domain.key -out domain.crt -days 3650 -subj /CN=www.example.com
+  * run npm install in tpp/server to install dependencies.
+  
 
 Running
 ---------------------------------
@@ -41,7 +43,7 @@ Running
     * node server_ssl.js
   * Open the Chrome browser and navigate to https://localhost:8443/robot.html
 * On Client computer
-  * open Chrome to https://ip.of.remote.com:8443/?username=user
+  * open Chrome to https://ip.of.remote.com:8443/?username=remote
   * Connect using the connect to button on the lower right corner.
   
 Caviots, Assumptions, Limitations
@@ -51,6 +53,10 @@ Caviots, Assumptions, Limitations
 
 Status
 ----------------------------------
+#### 2017-08-05
+  Switching development over to Linux.
+  Basic serial port commands are working, need to finish maestro driver
+  
 #### 2017-04-24
   Discovered node-pololumaestro. It looks excellent, but
   unfortunately it hasn't be updated in 3 years and doesn't install

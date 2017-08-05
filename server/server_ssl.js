@@ -65,7 +65,8 @@ var rtc = easyrtc.listen(app, socketServer, null, function(err, rtcRef) {
 });
 
 
-var comPort = "COM25";
+//var comPort = "COM25";
+var comPort = "/dev/ttyACM0";
 var botSerialPort;
 var prevCameraX = 0;
 var prevCameraY = 0;
@@ -140,7 +141,7 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
         });
 
         botSerialPort.on('error', function(err) {
-            console.log('Serila Port Error:', err.message);
+            console.log('Serial Port Error:', err.message);
         });
 
 
