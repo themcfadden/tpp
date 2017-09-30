@@ -38,7 +38,7 @@
       .a {
          grid-column: 1/5;
          grid-row: 1/5;
-         grid-
+
       }
       .b {
          grid-column: 5 ;
@@ -53,7 +53,7 @@
          grid-row: 3;
          min-height: 128px;
          min-width:  128px;
-         text-align: center;
+         <!--text-align: center;-->
       }
       .e {
          grid-column: 5;
@@ -84,7 +84,6 @@
               <div id="otherClients"></div>
             </div>
             <div class="box d"  id="container2">
-              <!-- <span id="result1"></span> -->
             </div>
             <div class="box e">
               <span id="result2"></span>
@@ -92,9 +91,16 @@
           </div>
 
           <script>
+
             var container1MidPoint = document.getElementById("container1").clientWidth/2;
-            container1BottomPoint = document.getElementById("container1").clientHeight - 30;
-            virtualJoyStickWorker(container1MidPoint,container1BottomPoint);
+            var container1BottomPoint = document.getElementById("container1").clientHeight - 30;
+            virtualJoyStickWorker1(container1MidPoint,container1BottomPoint);
+
+            var container2MidX = document.getElementById("container2").clientWidth/2;
+            var container2MidY = document.getElementById("container2").clientHeight/2;
+            virtualJoyStickWorker2(container2MidX,container2MidY);
+            
+
           </script>
           
 	</body>

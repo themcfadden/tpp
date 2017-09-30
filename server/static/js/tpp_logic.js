@@ -144,30 +144,22 @@ function getParameterByName(name, url) {
 //
 // VirtualJoystick Worker
 //
-function virtualJoyStickWorker(xstart, ystart) {
+function virtualJoyStickWorker1(xstart, ystart) {
     console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
     
     //var joystick1	= new VirtualJoystick({
+    // Main Display box on client side.
     gControl.joystick1	= new VirtualJoystick({
         container	: document.getElementById('container1'),
-        mouseSupport	: true,
-        strokeStyle     : "#888888",
-        //limitStickTravel: true,
-        limitStickTravel: false,
-	stickRadius	: 50,
-        stationaryBase  : false,
-        //baseX           : xstart,
-        //baseY           : ystart,
-    });
-    
-    gControl.joystick2	= new VirtualJoystick({
-        container	: document.getElementById('container2'),
+        strokeStyle     : 'white',
         mouseSupport	: true,
         limitStickTravel: true,
-	stickRadius	: 50,
-        stationaryBase  : false
+	stickRadius	: 100,
+        stationaryBase  : true,
+        baseX           : xstart,
+        baseY           : ystart,
     });
-
+    
     setInterval(function(){
 
         // only send data if connected
@@ -175,7 +167,27 @@ function virtualJoyStickWorker(xstart, ystart) {
         {
             var msg = {'x':gControl.joystick1.deltaX(), 'y':gControl.joystick1.deltaY()};
             sendServerMessage('js1', msg);
+        }
+    }, 1/30 * 1000);
+}
 
+function virtualJoyStickWorker2(xstart, ystart) {
+    gControl.joystick2	= new VirtualJoystick({
+        container	: document.getElementById('container2'),
+        strokeStyle     : 'red',
+        mouseSupport	: true,
+        limitStickTravel: true,
+	stickRadius	: 50,
+        stationaryBase  : true,
+        baseX           : xstart,
+        baseY           : ystart,
+    });
+
+    setInterval(function(){
+
+        // only send data if connected
+        if( gControl.hasDataConnection )
+        {
             var msg2= {'x':gControl.joystick2.deltaX(), 'y':gControl.joystick2.deltaY()};
             sendServerMessage('js2', msg2);
         }

@@ -91,36 +91,51 @@ var serialCommand = Buffer.from([0x84, 0x00, 0x00, 0x00]);
 
 var multiplier = 10;
 
+function map(x, in_min, in_max, out_min, out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
     switch(msg.msgType) {
     case 'js1':
-        if ( ( msg.msgData.x != prevCameraX ) || (msg.msgData.y != prevCameraY))
+        var x = Math.trunc(map(msg.msgData.x, -100, 100, 0, 255));
+        var y = Math.trunc(map(msg.msgData.y, -100, 100, 0, 255));
+
+        if ( ( x != prevCameraX ) || (y != prevCameraY))
         {
+            
             serialCommand[1] = 0;
-            serialCommand[2] = ((prevCameraX + msg.msgData.x) * multiplier)& 0x7F;
-            serialCommand[3] = (((prevCameraX + msg.msgData.x) * multiplier) >> 7) & 0x7F;
+            //serialCommand[2] = ((prevCameraX + x) * multiplier)& 0x7F;
+            //serialCommand[3] = (((prevCameraX + x) * multiplier) >> 7) & 0x7F;
+            serialCommand[2] = (x * multiplier) & 0x7F;
+            serialCommand[3] = ((x * multiplier) >> 7) & 0x7F;
             botSerialPort.write(serialCommand, serialWriteError);
 
-            console.log('Camera:', msg.msgData, msg.msgData.x,serialCommand[2], serialCommand[3]);
+            console.log('Camera:',
+                        'X:',x, 'Y:', y,
+                        'Cmd:', serialCommand[2], serialCommand[3]);
 
             serialCommand[1] = 1;
-            serialCommand[2] = (msg.msgData.y * multiplier) & 0x7F;
-            serialCommand[3] = ((msg.msgData.y * multiplier) >> 7) & 0x7F;
+            serialCommand[2] = (y * multiplier) & 0x7F;
+            serialCommand[3] = ((y * multiplier) >> 7) & 0x7F;
             botSerialPort.write(serialCommand, serialWriteError);
 
-            prevCameraX = msg.msgData.x;
-            prevCameraY = msg.msgData.y;
+            prevCameraX = x;
+            prevCameraY = y;
 
         }
         socketCallback({msgType:'js1', msgData:'done1'});
         next(null);
         break;
     case 'js2':
-        if ( ( msg.msgData.x != prevMoveX ) || (msg.msgData.y != prevMoveY))
+        var x = Math.trunc(map(msg.msgData.x, -50, 50, 0, 255));
+        var y = Math.trunc(map(msg.msgData.y, -50, 50, 0, 255));
+
+        if ( ( x != prevMoveX ) || (y != prevMoveY))
         {
-            console.log('Move:', msg.msgData);
-            prevMoveX = msg.msgData.x;
-            prevMoveY = msg.msgData.y;
+            console.log('Move:', x, y);
+            prevMoveX = x;
+            prevMoveY = y;
         }
         socketCallback({msgType:'js2', msgData:'done2'});
         next(null);
