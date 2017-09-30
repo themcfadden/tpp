@@ -53,6 +53,10 @@ Caviots, Assumptions, Limitations
 
 Status
 ----------------------------------
+#### 2017-09-30
+  On screen mouse controls working.
+  Add map function to scale input to needed output ranges.
+  
 #### 2017-08-05
   Switching development over to Linux.
   Basic serial port commands are working, need to finish maestro driver
@@ -72,9 +76,9 @@ To Do List
 - [X] Get WebRTC data channel plumbed and working.
 - [X] Incorporate virtual joystick for control of camera, motors, etc.
 - [X] Figure out if possible to set name instead of using the randomly generated name.
-- [ ] Get the serial port working via nodejs.
-- [ ] Implement web to serial connection.
+- [X] Get the serial port working via nodejs.
+- [X] Implement web to serial connection.
 - [ ] Write code for controlling servos.
 - [ ] Write code for controlling motors.
-- [ ] Set default remote name to something like "remote_bot"
+- [X] Set default remote name to something like "remote_bot"
 - [ ] Implement disconnect on client side.
