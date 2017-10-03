@@ -35,6 +35,9 @@
   "engines": {
     "node": ">=0.8"
   },
+    "dependencies": {
+        "CBuffer": "^2.0.0"
+    },
   "devDependencies": {
     "fs": "0.0.2",
     "grunt": "^0.4.5",

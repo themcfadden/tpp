@@ -154,15 +154,13 @@ function virtualJoyStickWorker1(xstart, ystart) {
         strokeStyle     : 'white',
         mouseSupport	: true,
         limitStickTravel: true,
-	stickRadius	: 100,
+        stickRadius	: 100,
         stationaryBase  : true,
         baseX           : xstart,
         baseY           : ystart,
     });
     
     setInterval(function(){
-
-        // only send data if connected
         if( gControl.hasDataConnection )
         {
             var msg = {'x':gControl.joystick1.deltaX(), 'y':gControl.joystick1.deltaY()};
@@ -177,14 +175,13 @@ function virtualJoyStickWorker2(xstart, ystart) {
         strokeStyle     : 'red',
         mouseSupport	: true,
         limitStickTravel: true,
-	stickRadius	: 50,
+        stickRadius	: 50,
         stationaryBase  : true,
         baseX           : xstart,
         baseY           : ystart,
     });
 
     setInterval(function(){
-
         // only send data if connected
         if( gControl.hasDataConnection )
         {
