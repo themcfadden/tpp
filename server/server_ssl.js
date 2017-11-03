@@ -95,7 +95,7 @@ function serialWriteData() {
         }
     }
     else {
-        console.log("No botSerialPort");
+        //console.log("No botSerialPort");
     }
 }
 
@@ -119,7 +119,7 @@ function map(x, in_min, in_max, out_min, out_max) {
 var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
     switch(msg.msgType) {
     case 'js1':
-        var x = Math.trunc(map(msg.msgData.x, -100, 100, 1435, 1470));
+        var x = Math.trunc(map(msg.msgData.x, -100, 100, 1470, 1435));
         var y = Math.trunc(map(msg.msgData.y, -100, 100, 1435, 1470));
 
         if ( ( x != prevCameraX ) || (y != prevCameraY))
@@ -137,9 +137,9 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
             cmdY.push((y * multiplier) & 0x7F);
             serialBuffer.push(cmdY);
             
-            console.log('Camera:',
-                        'X:',x, 'Y:', y,
-                        'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
+            //console.log('Camera:',
+            //            'X:',x, 'Y:', y,
+            //            'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
 
             prevCameraX = x;
             prevCameraY = y;
@@ -180,6 +180,11 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
 
     case 'callAccepted':
         // Add serial port set up here
+        if (botSerialPort != null )
+        {
+            console.log("botSerialPort is NOT NULL");
+            botSerialPort.close();
+        }
         botSerialPort = new SerialPort(comPort,
                                        {
                                            baudRate:9600,
@@ -196,7 +201,9 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
         });
 
         botSerialPort.on('error', function(err) {
-            console.log('Serial Port Error:', err.message);
+            console.log('Serial Port Error:', err);
+            botSerialPortIsReady = false;
+            console.log(botSerialPort);
         });
 
 
