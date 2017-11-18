@@ -85,8 +85,9 @@
             </div>
             <div class="box d"  id="container2">
             </div>
-            <div class="box e">
-              <span id="result2"></span>
+            <div class="box e" id="soundCountrols">
+              <button onClick="muteMeToggle()" id="muteMe">Mute me</button>
+              <!--<button onClick="nextCamera()" id="nextCamera">Next Camera</button>-->
             </div>
           </div>
 
@@ -99,8 +100,6 @@
             var container2MidX = document.getElementById("container2").clientWidth/2;
             var container2MidY = document.getElementById("container2").clientHeight/2;
             virtualJoyStickWorker2(container2MidX,container2MidY);
-
-            timerTick();            
 
           </script>
           

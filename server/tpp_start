@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd /home/mattmc/projects/tpp/server
+
 export DISPLAY=:0.0
 
 sudo killall node-easyrtc > /dev/null

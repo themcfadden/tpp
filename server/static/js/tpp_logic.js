@@ -5,8 +5,10 @@ var gControl =
         username: "",
         hasDataConnection: false,
         joystick1: null,
-        joystick2: null
+        joystick2: null,
+        IAmTheRobot: false,
     };
+var mediaStreams = []
 
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
@@ -29,6 +31,21 @@ function connect() {
 
     easyrtc.setAcceptChecker(callAcceptor);
 
+    // Set up all media sources
+    easyrtc.getVideoSourceList( function(list) {
+        for ( i = 0; i < list.length; i++ ) {
+            easyrtc.initMediaSource(
+                function(mediaStream) {
+                    mediaStreams[i] = mediaStream;
+                },
+                function(errorCode) {
+                    console.log("initMedia error callback:" + errorCode);
+                },
+                "Camera"+i);
+        };
+    });
+                                
+    // Init main/default media source
     easyrtc.initMediaSource(
         function() {
             var selfVideo = document.getElementById("selfVideo");
@@ -39,6 +56,50 @@ function connect() {
     );
  }
 
+function muteMeToggle() {
+    var b = document.getElementById('muteMe');
+    if (b.innerHTML == "Mute me") {
+        b.innerHTML = "UnMute me";
+        easyrtc.enableMicrophone(false);
+    }
+    else {
+        b.innerHTML = "Mute me";
+        easyrtc.enableMicrophone(true);
+    }
+}
+
+var currentCameraIndex = 0;
+function nextCamera() {
+    
+    var selfVideo = document.getElementById("selfVideo");
+    currentCameraIndex += 1;
+    if ( currentCameraIndex >= mediaStreams.length ) {
+        currentCameraIndex = 0;
+    }
+
+    easyrtc.setVideoObjectSrc(selfVideo, mediaStreams[currentCameraIndex]);
+
+    
+                              
+//    easyrtc.getVideoSourceList( function(list) {
+//        currentCameraIndex += 1;
+//        if ( currentCameraIndex >= list.length ) {
+//            currentCameraIndex = 0;
+//        }
+//        console.log("setting camera to:", list[currentCameraIndex]);
+//        easyrtc.closeLocalMediaStream(easyrtc.getLocalStream());
+//        easyrtc.setVideoSource(list[currentCameraIndex].id);
+//        easyrtc.initMediaSource(
+//            function () {
+//                
+//                var selfVideo = document.getElementById("selfVideo");
+//                easyrtc.setVideoObjectSrc(selfVideo, easyrtc.getLocalStream());
+//                easyrtc.connect("tpp_bot", loginSuccess, loginFailure);
+//            },
+//            loginFailure
+//        );
+//    });
+}
 
 function clearConnectList() {
     var otherClientDiv = document.getElementById('otherClients');
@@ -97,9 +158,11 @@ function callAcceptor(easyrtcid, acceptorCB)
         acceptorCB(true);
         console.log("I am the robot");
         sendServerMessage('callAccepted', {'who':'remote'});
+        gControl.IAmTheRobot = true;
     }
     else {
         acceptorCB(false);
+        
     }
 }
 
@@ -107,7 +170,7 @@ function callAcceptor(easyrtcid, acceptorCB)
 function loginSuccess(easyrtcid) {
     selfEasyrtcid = easyrtcid;
     console.log(easyrtcid + " ==> " + easyrtc.idToName(easyrtcid));
-    document.getElementById("iam").innerHTML = "I am " + easyrtc.idToName(easyrtcid);
+    document.getElementById("iam").innerHTML = "My Id: " + easyrtc.idToName(easyrtcid);
 }
 
 function loginFailure(errorCode, message) {

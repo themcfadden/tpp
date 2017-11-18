@@ -18,16 +18,13 @@ app.use(serveStatic('static', {'index': ['index.html']}));
 
 var serialBuffer = [];
 
-// Start Express http server on port 8080
-//var webServer = http.createServer(app).listen(8080);
+// Configure Express http server
 const options =
     {
         key:  fs.readFileSync("domain.key"),
         cert: fs.readFileSync("domain.crt")
     };
-
 var webServer = https.createServer(options, app).listen(8443);
-
 
 // Start Socket.io so it attaches itself to Express server
 var socketServer = socketIo.listen(webServer, {"log level":1});
@@ -119,8 +116,8 @@ function map(x, in_min, in_max, out_min, out_max) {
 var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
     switch(msg.msgType) {
     case 'js1':
-        var x = Math.trunc(map(msg.msgData.x, -100, 100, 1470, 1435));
-        var y = Math.trunc(map(msg.msgData.y, -100, 100, 1435, 1470));
+        var x = Math.trunc(map(msg.msgData.x, -100, 100, 1435, 1470));
+        var y = Math.trunc(map(msg.msgData.y, -100, 100, 1470, 1435));
 
         if ( ( x != prevCameraX ) || (y != prevCameraY))
         {
@@ -137,9 +134,9 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
             cmdY.push((y * multiplier) & 0x7F);
             serialBuffer.push(cmdY);
             
-            //console.log('Camera:',
-            //            'X:',x, 'Y:', y,
-            //            'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
+            console.log('Camera:',
+                        'X:',x, 'Y:', y,
+                        'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
 
             prevCameraX = x;
             prevCameraY = y;
@@ -151,7 +148,7 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
         break;
     case 'js2':
         var x = Math.trunc(map(msg.msgData.x, -50, 50, 1430, 1470));
-        var y = Math.trunc(map(msg.msgData.y, -50, 50, 1430, 1470));
+        var y = Math.trunc(map(msg.msgData.y, -50, 50, 1470, 1430));
 
         if ( ( x != prevMoveX ) || (y != prevMoveY))
         {
@@ -206,6 +203,22 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
             console.log(botSerialPort);
         });
 
+        // Set servo accel
+        var cmdServo = [0x89];
+        cmdServo.push(0);          // channel
+        cmdServo.push(0x3 & 0x7F); // low bits
+        //cmdServo.push(0 & 0x7F); // low bits
+        cmdServo.push(0);          // high bits
+        serialBuffer.push(cmdServo);
+        serialWriteData();
+        
+        cmdServo = [0x89];
+        cmdServo.push(1);          // channel
+        cmdServo.push(0x3 & 0x7F); // low bits
+        //cmdServo.push(0 & 0x7F); // low bits
+        cmdServo.push(0);          // high bits
+        serialBuffer.push(cmdServo);
+        serialWriteData();
 
         console.log('Got a callAccepted', msg.msgData);
         if( msg.msgData.who == 'remote') {

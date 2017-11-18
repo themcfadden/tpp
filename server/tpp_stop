@@ -1,7 +1,5 @@
 #!/bin/bash
 
-export DISPLAY=:0.0
-
 sudo killall node-easyrtc > /dev/null
 sudo killall chromium-browser > /dev/null
 
