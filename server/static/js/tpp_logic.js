@@ -54,52 +54,68 @@ function connect() {
         },
         loginFailure
     );
+
+    // Default to muted local mic, so they don't here me by default.
+    muteMeToggle();
  }
 
 function muteMeToggle() {
     var b = document.getElementById('muteMe');
-    if (b.innerHTML == "Mute me") {
-        b.innerHTML = "UnMute me";
+    if (b.innerHTML == "Mute Me") {
+        b.innerHTML = "UnMute Me";
         easyrtc.enableMicrophone(false);
     }
     else {
-        b.innerHTML = "Mute me";
+        b.innerHTML = "Mute Me";
         easyrtc.enableMicrophone(true);
     }
 }
 
-var currentCameraIndex = 0;
-function nextCamera() {
-    
-    var selfVideo = document.getElementById("selfVideo");
-    currentCameraIndex += 1;
-    if ( currentCameraIndex >= mediaStreams.length ) {
-        currentCameraIndex = 0;
+function muteThemToggle() {
+    var b = document.getElementById('muteThem');
+    var callerVideo = document.getElementById('callerVideo');
+    if (b.innerHTML == "Mute Them") {
+        b.innerHTML = "UnMute Them";
+        callerVideo.muted = true;
     }
-
-    easyrtc.setVideoObjectSrc(selfVideo, mediaStreams[currentCameraIndex]);
-
-    
-                              
-//    easyrtc.getVideoSourceList( function(list) {
-//        currentCameraIndex += 1;
-//        if ( currentCameraIndex >= list.length ) {
-//            currentCameraIndex = 0;
-//        }
-//        console.log("setting camera to:", list[currentCameraIndex]);
-//        easyrtc.closeLocalMediaStream(easyrtc.getLocalStream());
-//        easyrtc.setVideoSource(list[currentCameraIndex].id);
-//        easyrtc.initMediaSource(
-//            function () {
-//                
-//                var selfVideo = document.getElementById("selfVideo");
-//                easyrtc.setVideoObjectSrc(selfVideo, easyrtc.getLocalStream());
-//                easyrtc.connect("tpp_bot", loginSuccess, loginFailure);
-//            },
-//            loginFailure
-//        );
-//    });
+    else {
+        b.innerHTML = "Mute Them";
+        callerVideo.muted = false;
+    }
 }
+
+//var currentCameraIndex = 0;
+//function nextCamera() {
+//    
+//    var selfVideo = document.getElementById("selfVideo");
+//    currentCameraIndex += 1;
+//    if ( currentCameraIndex >= mediaStreams.length ) {
+//        currentCameraIndex = 0;
+//    }
+//
+//    easyrtc.setVideoObjectSrc(selfVideo, mediaStreams[currentCameraIndex]);
+//
+//    
+//                              
+////    easyrtc.getVideoSourceList( function(list) {
+////        currentCameraIndex += 1;
+////        if ( currentCameraIndex >= list.length ) {
+////            currentCameraIndex = 0;
+////        }
+////        console.log("setting camera to:", list[currentCameraIndex]);
+////        easyrtc.closeLocalMediaStream(easyrtc.getLocalStream());
+////        easyrtc.setVideoSource(list[currentCameraIndex].id);
+////        easyrtc.initMediaSource(
+////            function () {
+////                
+////                var selfVideo = document.getElementById("selfVideo");
+////                easyrtc.setVideoObjectSrc(selfVideo, easyrtc.getLocalStream());
+////                easyrtc.connect("tpp_bot", loginSuccess, loginFailure);
+////            },
+////            loginFailure
+////        );
+////    });
+//}
 
 function clearConnectList() {
     var otherClientDiv = document.getElementById('otherClients');
@@ -214,7 +230,7 @@ function virtualJoyStickWorker1(xstart, ystart) {
     // Main Display box on client side.
     gControl.joystick1	= new VirtualJoystick({
         container	: document.getElementById('container1'),
-        strokeStyle     : 'white',
+        strokeStyle     : 'green',
         mouseSupport	: true,
         limitStickTravel: true,
         stickRadius	: 100,

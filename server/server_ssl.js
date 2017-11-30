@@ -134,9 +134,9 @@ var onEasyrtcMsg = function(connectionObj, msg, socketCallback, next){
             cmdY.push((y * multiplier) & 0x7F);
             serialBuffer.push(cmdY);
             
-            console.log('Camera:',
-                        'X:',x, 'Y:', y,
-                        'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
+            //console.log('Camera:',
+            //            'X:',x, 'Y:', y,
+            //            'Cmd:', cmdX[2], cmdX[3], cmdY[2], cmdY[3]);
 
             prevCameraX = x;
             prevCameraY = y;
