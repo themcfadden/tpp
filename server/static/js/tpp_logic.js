@@ -54,9 +54,6 @@ function connect() {
         },
         loginFailure
     );
-
-    // Default to muted local mic, so they don't here me by default.
-    muteMe(true);
  }
 
 //function muteMeToggle() {
@@ -129,11 +126,9 @@ function muteMeToggle() {
     var b = document.getElementById('muteMe');
     if (b.innerHTML == "Mute Me") {
         muteMe(true);
-        //easyrtc.enableMicrophone(true);
     }
     else {
         muteMe(false);
-        //easyrtc.enableMicrophone(false);
     }
 }
 
@@ -187,6 +182,8 @@ function performCall(otherEasyrtcid) {
 
     var successCB = function(easyrtcid) {
         console.log("Successfully called:" + easyrtc.idToName(easyrtcid))
+        // Default to muted local mic, so they don't here me by default.
+        muteMe(true);
     };
     var failureCB = function() {};
     var acceptCB = function (accepted, easyrtcid) {
