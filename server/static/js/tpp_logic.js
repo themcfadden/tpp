@@ -56,7 +56,6 @@ function connect() {
     );
 
     // Default to muted local mic, so they don't here me by default.
-    //muteMeToggle();
     muteMe(true);
  }
 
