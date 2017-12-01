@@ -56,18 +56,85 @@ function connect() {
     );
 
     // Default to muted local mic, so they don't here me by default.
-    muteMeToggle();
+    //muteMeToggle();
+    muteMe(true);
  }
+
+//function muteMeToggle() {
+//    var b = document.getElementById('muteMe');
+//    if (b.innerHTML == "Mute Me") {
+//        b.innerHTML = "UnMute Me";
+//        easyrtc.enableMicrophone(false);
+//    }
+//    else {
+//        b.innerHTML = "Mute Me";
+//        easyrtc.enableMicrophone(true);
+//    }
+//}
+//
+//function muteThemToggle() {
+//    var b = document.getElementById('muteThem');
+//    var callerVideo = document.getElementById('callerVideo');
+//    if (b.innerHTML == "Mute Them") {
+//        b.innerHTML = "UnMute Them";
+//        callerVideo.muted = true;
+//    }
+//    else {
+//        b.innerHTML = "Mute Them";
+//        callerVideo.muted = false;
+//    }
+//}
+
+function muteMe(muteFlag) {
+    easyrtc.enableMicrophone(muteFlag == false);
+    console.log("Microphone Enable set to: ", muteFlag == false);
+
+    var b = document.getElementById('muteMe');
+    if (muteFlag) {
+        b.innerHTML = "UnMute Me";
+    }
+    else {
+        b.innerHTML = "Mute Me";
+    }
+}
+
+function muteThem(muteFlag) {
+    var callerVideo = document.getElementById('callerVideo');
+    callerVideo.muted = muteFlag;
+
+    var b = document.getElementById('muteThem');
+    if (muteFlag) {
+        b.innerHTML = "UnMute Them";
+    }
+    else {
+        b.innerHTML = "Mute Them";
+    }
+}
+
+function muteAllToggle() {
+    var ma = document.getElementById('muteAll');
+
+    if (ma.innerHTML == "Mute All")  {
+        ma.innerHTML = "UnMute All";
+        muteMe(true);
+        muteThem(true);
+    }
+    else {
+        ma.innerHTML = "Mute All";
+        muteMe(false);
+        muteThem(false);
+    }    
+}
 
 function muteMeToggle() {
     var b = document.getElementById('muteMe');
     if (b.innerHTML == "Mute Me") {
-        b.innerHTML = "UnMute Me";
-        easyrtc.enableMicrophone(false);
+        muteMe(true);
+        //easyrtc.enableMicrophone(true);
     }
     else {
-        b.innerHTML = "Mute Me";
-        easyrtc.enableMicrophone(true);
+        muteMe(false);
+        //easyrtc.enableMicrophone(false);
     }
 }
 
@@ -75,47 +142,12 @@ function muteThemToggle() {
     var b = document.getElementById('muteThem');
     var callerVideo = document.getElementById('callerVideo');
     if (b.innerHTML == "Mute Them") {
-        b.innerHTML = "UnMute Them";
-        callerVideo.muted = true;
+        muteThem(true);
     }
     else {
-        b.innerHTML = "Mute Them";
-        callerVideo.muted = false;
+        muteThem(false);
     }
 }
-
-//var currentCameraIndex = 0;
-//function nextCamera() {
-//    
-//    var selfVideo = document.getElementById("selfVideo");
-//    currentCameraIndex += 1;
-//    if ( currentCameraIndex >= mediaStreams.length ) {
-//        currentCameraIndex = 0;
-//    }
-//
-//    easyrtc.setVideoObjectSrc(selfVideo, mediaStreams[currentCameraIndex]);
-//
-//    
-//                              
-////    easyrtc.getVideoSourceList( function(list) {
-////        currentCameraIndex += 1;
-////        if ( currentCameraIndex >= list.length ) {
-////            currentCameraIndex = 0;
-////        }
-////        console.log("setting camera to:", list[currentCameraIndex]);
-////        easyrtc.closeLocalMediaStream(easyrtc.getLocalStream());
-////        easyrtc.setVideoSource(list[currentCameraIndex].id);
-////        easyrtc.initMediaSource(
-////            function () {
-////                
-////                var selfVideo = document.getElementById("selfVideo");
-////                easyrtc.setVideoObjectSrc(selfVideo, easyrtc.getLocalStream());
-////                easyrtc.connect("tpp_bot", loginSuccess, loginFailure);
-////            },
-////            loginFailure
-////        );
-////    });
-//}
 
 function clearConnectList() {
     var otherClientDiv = document.getElementById('otherClients');

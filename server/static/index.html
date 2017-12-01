@@ -62,8 +62,11 @@
          min-width:  128px;
       }
       .video {
-      width: 100%;
-      height: auto;
+         width: 100%;
+         height: auto;
+      }
+      .button_format {
+         width: 75%
       }
                 
     </style>
@@ -85,10 +88,10 @@
             </div>
             <div class="box d"  id="container2">
             </div>
-            <div class="box e" id="soundCountrols">
-              <button onClick="muteMeToggle()" id="muteMe">Mute Me</button>
-              <button onClick="muteThemToggle()" id="muteThem">Mute Them</button>
-              <!--<button onClick="nextCamera()" id="nextCamera">Next Camera</button>-->
+            <div class="box e" id="soundCountrols" style="text-align:center;">
+              <button class="button_format" onClick="muteAllToggle()" id="muteAll">Mute All</button>
+              <button class="button_format" onClick="muteMeToggle()" id="muteMe">Mute Me</button>
+              <button class="button_format" onClick="muteThemToggle()" id="muteThem">Mute Them</button>
             </div>
           </div>
 
