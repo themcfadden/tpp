@@ -54,32 +54,18 @@ function connect() {
         },
         loginFailure
     );
- }
 
-//function muteMeToggle() {
-//    var b = document.getElementById('muteMe');
-//    if (b.innerHTML == "Mute Me") {
-//        b.innerHTML = "UnMute Me";
-//        easyrtc.enableMicrophone(false);
-//    }
-//    else {
-//        b.innerHTML = "Mute Me";
-//        easyrtc.enableMicrophone(true);
-//    }
-//}
-//
-//function muteThemToggle() {
-//    var b = document.getElementById('muteThem');
-//    var callerVideo = document.getElementById('callerVideo');
-//    if (b.innerHTML == "Mute Them") {
-//        b.innerHTML = "UnMute Them";
-//        callerVideo.muted = true;
-//    }
-//    else {
-//        b.innerHTML = "Mute Them";
-//        callerVideo.muted = false;
-//    }
-//}
+    // Init local volume control
+    var volVal = 50;
+    if (gControl.IAmTheRobot) {
+        volVal = 50;
+    }
+    else {
+        volVal = 90;
+    }
+    setTheirVolume(volVal);
+    document.getElementById('volume-control').value = volVal;
+ }
 
 function muteMe(muteFlag) {
     easyrtc.enableMicrophone(muteFlag == false);
@@ -134,13 +120,18 @@ function muteMeToggle() {
 
 function muteThemToggle() {
     var b = document.getElementById('muteThem');
-    var callerVideo = document.getElementById('callerVideo');
+    //var callerVideo = document.getElementById('callerVideo');
     if (b.innerHTML == "Mute Them") {
         muteThem(true);
     }
     else {
         muteThem(false);
     }
+}
+
+function setTheirVolume(newValue) {
+    var video = document.getElementById('callerVideo');
+    video.volume = newValue / 100;
 }
 
 function clearConnectList() {
@@ -152,7 +143,6 @@ function clearConnectList() {
         }
     }
 }
-
 
 function convertListToButtons (roomName, data, isPrimary) {
     clearConnectList();
@@ -209,7 +199,6 @@ function callAcceptor(easyrtcid, acceptorCB)
         
     }
 }
-
 
 function loginSuccess(easyrtcid) {
     selfEasyrtcid = easyrtcid;

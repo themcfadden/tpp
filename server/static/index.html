@@ -32,7 +32,7 @@
 	 color: #fff;
 	 border-radius: 5px;
 	 padding: 10px;
-	 font-size: 150%;
+	 //font-size: 150%;
       }
 
       .a {
@@ -68,7 +68,19 @@
       .button_format {
          width: 75%
       }
-                
+
+      .slide_label {
+         display: inline-block;
+         font-size: 50%;
+         //text-align: left;
+         width: 35%;
+      }
+      .slide_input {
+         display: inline-block;
+         //width: 60%;
+      }
+         
+
     </style>
 	</head>
 	<body onload="connect();">
@@ -92,6 +104,16 @@
               <button class="button_format" onClick="muteAllToggle()" id="muteAll">Mute All</button>
               <button class="button_format" onClick="muteMeToggle()" id="muteMe">Mute Me</button>
               <button class="button_format" onClick="muteThemToggle()" id="muteThem">Mute Them</button>
+
+              <!--
+              <div class="slide_label">
+                <label for="volume-control">My Volume</label>
+              </div>
+              -->
+              <div class="slide_input">
+                <input id="volume-control" type="range" min="0" max="100" step="1"
+                       oninput="setTheirVolume(this.value)" onchange="setTheirVolume(this.value)"></input>
+              </div>
             </div>
           </div>
 
