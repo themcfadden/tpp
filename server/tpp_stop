@@ -1,7 +1,8 @@
 #!/bin/bash
 
 sudo killall node-easyrtc > /dev/null
-sudo killall chromium-browser > /dev/null
+#sudo killall chromium-browser > /dev/null
+sudo killall firefox > /dev/null
 
 
 
