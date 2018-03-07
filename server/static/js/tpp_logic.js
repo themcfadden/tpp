@@ -44,7 +44,7 @@ function connect() {
                 "Camera"+i);
         };
     });
-                                
+
     // Init main/default media source
     easyrtc.initMediaSource(
         function() {
@@ -74,9 +74,11 @@ function muteMe(muteFlag) {
     var b = document.getElementById('muteMe');
     if (muteFlag) {
         b.innerHTML = "UnMute Me";
+        b.style.backgroundColor="red";
     }
     else {
         b.innerHTML = "Mute Me";
+        b.style.backgroundColor="";
     }
 }
 
@@ -87,9 +89,26 @@ function muteThem(muteFlag) {
     var b = document.getElementById('muteThem');
     if (muteFlag) {
         b.innerHTML = "UnMute Them";
+        b.style.backgroundColor="red";
     }
     else {
         b.innerHTML = "Mute Them";
+        b.style.backgroundColor="";
+    }
+}
+
+function muteRemoteSpeaker(muteFlag) {
+    var callerVideo = document.getElementById('callerVideo');
+    callerVideo.muted = muteFlag;
+
+    var b = document.getElementById('muteRemoteSpeaker');
+    if (muteFlag) {
+        b.innerHTML = "UnMute @ Robot";
+        b.style.backgroundColor="red";
+    }
+    else {
+        b.innerHTML = "Mute @ Robot";
+        b.style.backgroundColor="";
     }
 }
 
@@ -100,11 +119,13 @@ function muteAllToggle() {
         ma.innerHTML = "UnMute All";
         muteMe(true);
         muteThem(true);
+        ma.style.backgroundColor="red";
     }
     else {
         ma.innerHTML = "Mute All";
         muteMe(false);
         muteThem(false);
+        ma.style.backgroundColor="";
     }    
 }
 
@@ -126,6 +147,17 @@ function muteThemToggle() {
     }
     else {
         muteThem(false);
+    }
+}
+
+function muteRemoteSpeakerToggle() {
+    var b = document.getElementById('muteRemoteSpeaker');
+    //var callerVideo = document.getElementById('callerVideo');
+    if (b.innerHTML == "Mute @ Robot") {
+        muteRemoteSpeaker(true);
+    }
+    else {
+        muteRemoteSpeaker(false);
     }
 }
 
@@ -285,6 +317,11 @@ function virtualJoyStickWorker2(xstart, ystart) {
             sendServerMessage('js2', msg2);
         }
     }, 1/30 * 1000);
+}
+
+function setRemoteMute(muteFlag) {
+    var muteMessage = {'localSpeaker':muteFlag};
+    sendServerMessage('localSpeaker', muteMessage);
 }
 
 // See http://marcj.github.io/css-element-queries/

@@ -53,6 +53,14 @@
          display: inline-block;
          //width: 60%;
       }
+      .button_format {
+         width: 75%;
+         background-color: grey; color: black;
+      }
+      .button_format_warn {
+         width: 75%;
+         background-color: red; color: black;
+      }
 
     </style>
     
@@ -65,15 +73,18 @@
       <div class="box b">
         <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
       </div>
-      <div class="box c" id="connectControls">
-        <div id="iam">Not yet connected...</div>
-      </div>
-      <div class="box d" id="result1"></div>
-      <div class="box e" id="result2">
+      <div id="iam">Not yet connected...</div>
+      <div class="box c" id="connectControls" style="text-align:center;">
+        <button class="button_format" onClick="mute()" id="muteThem">Mute Them</button>
+
         <div class="slide_input">
+          <label for="volume-control">Volume</label>
           <input id="volume-control" type="range" min="0" max="100" step="1"
                  oninput="setTheirVolume(this.value)" onchange="setTheirVolume(this.value)"></input>
         </div>
+      </div>
+      <div class="box d" id="result1"></div>
+      <div class="box e" id="result2">
       </div>
     </div>
   </body>
