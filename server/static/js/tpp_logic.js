@@ -7,6 +7,7 @@ var gControl =
         joystick1: null,
         joystick2: null,
         IAmTheRobot: false,
+        otherEasyrtcid: null,
     };
 var mediaStreams = []
 
@@ -27,6 +28,8 @@ function connect() {
     easyrtc.setUsername(gControl.username);
 
     easyrtc.setVideoDims(640,480);
+    //
+    easyrtc.setPeerListener(gotMessageFromPeer);
     easyrtc.setRoomOccupantListener(convertListToButtons);
 
     easyrtc.setAcceptChecker(callAcceptor);
@@ -105,10 +108,12 @@ function muteRemoteSpeaker(muteFlag) {
     if (muteFlag) {
         b.innerHTML = "UnMute @ Robot";
         b.style.backgroundColor="red";
+        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE");
     }
     else {
         b.innerHTML = "Mute @ Robot";
         b.style.backgroundColor="";
+        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE");
     }
 }
 
@@ -176,6 +181,30 @@ function clearConnectList() {
     }
 }
 
+function sendMessageToPeer(otherEasyrtcid, message) {
+    console.log("sendMessageToPeer(), other:", otherEasyrtcid, "message:", message);
+
+    if( otherEasyrtcid != null) {
+        easyrtc.sendDataWS(otherEasyrtcid, "message", message);
+    }
+}
+
+function gotMessageFromPeer(who, msgType, content) {
+    console.log("who:", who, "msgType:", msgType, "content:", content);
+
+    if( msgType == "message" ) {
+        if( content == "MUTE")  {
+            muteThem(true);
+        }
+        else if( content == "UNMUTE") {
+            muteThem(false);
+        }
+        else {
+            console.log("Unknown message from peer");
+        }
+    }
+}
+
 function convertListToButtons (roomName, data, isPrimary) {
     clearConnectList();
 
@@ -204,6 +233,7 @@ function performCall(otherEasyrtcid) {
 
     var successCB = function(easyrtcid) {
         console.log("Successfully called:" + easyrtc.idToName(easyrtcid))
+        gControl.otherEasyrtcid = otherEasyrtcid;
         // Default to muted local mic, so they don't here me by default.
         muteMe(true);
     };
@@ -319,10 +349,10 @@ function virtualJoyStickWorker2(xstart, ystart) {
     }, 1/30 * 1000);
 }
 
-function setRemoteMute(muteFlag) {
-    var muteMessage = {'localSpeaker':muteFlag};
-    sendServerMessage('localSpeaker', muteMessage);
-}
+//function setRemoteMute(muteFlag) {
+//    var muteMessage = {'localSpeaker':muteFlag};
+//    sendServerMessage('localSpeaker', muteMessage);
+//}
 
 // See http://marcj.github.io/css-element-queries/
 function updateSize() {
