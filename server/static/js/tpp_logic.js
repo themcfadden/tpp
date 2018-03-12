@@ -85,6 +85,16 @@ function muteMe(muteFlag) {
     }
 }
 
+function muteMeToggle() {
+    var b = document.getElementById('muteMe');
+    if (b.innerHTML == "Mute Me") {
+        muteMe(true);
+    }
+    else {
+        muteMe(false);
+    }
+}
+
 function muteThem(muteFlag) {
     var callerVideo = document.getElementById('callerVideo');
     callerVideo.muted = muteFlag;
@@ -100,20 +110,14 @@ function muteThem(muteFlag) {
     }
 }
 
-function muteRemoteSpeaker(muteFlag) {
-    var callerVideo = document.getElementById('callerVideo');
-    callerVideo.muted = muteFlag;
+function muteThemToggle() {
+    var b = document.getElementById('muteThem');
 
-    var b = document.getElementById('muteRemoteSpeaker');
-    if (muteFlag) {
-        b.innerHTML = "UnMute @ Robot";
-        b.style.backgroundColor="red";
-        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE");
+    if (b.innerHTML == "Mute Them") {
+        muteThem(true);
     }
     else {
-        b.innerHTML = "Mute @ Robot";
-        b.style.backgroundColor="";
-        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE");
+        muteThem(false);
     }
 }
 
@@ -134,37 +138,62 @@ function muteAllToggle() {
     }    
 }
 
-function muteMeToggle() {
-    var b = document.getElementById('muteMe');
-    if (b.innerHTML == "Mute Me") {
-        muteMe(true);
+function muteMeRobot(muteFlag) {
+    var callerVideo = document.getElementById('callerVideo');
+    callerVideo.muted = muteFlag;
+
+    var b = document.getElementById('muteMeRobot');
+    if (muteFlag) {
+        b.innerHTML = "UnMute Me @ Robot";
+        b.style.backgroundColor="red";
     }
     else {
-        muteMe(false);
+        b.innerHTML = "Mute Me @ Robot";
+        b.style.backgroundColor="";
     }
 }
 
-function muteThemToggle() {
+function muteMeRobotToggle() {
+    var b = document.getElementById('muteMeRobot');
+
+    if (b.innerHTML == "Mute Me @ Robot") {
+        muteMeRobot(true);
+        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE_ME_ROBOT");
+    }
+    else {
+        muteMeRobot(false);
+        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE_ME_ROBOT");
+    }
+}
+
+function muteThemRobot(muteFlag) {
+    var callerVideo = document.getElementById('callerVideo');
+    callerVideo.muted = muteFlag;
+
     var b = document.getElementById('muteThem');
-    //var callerVideo = document.getElementById('callerVideo');
-    if (b.innerHTML == "Mute Them") {
-        muteThem(true);
+    if (muteFlag) {
+        b.innerHTML = "UnMute Them";
+        b.style.backgroundColor="red";
     }
     else {
-        muteThem(false);
+        b.innerHTML = "Mute Them";
+        b.style.backgroundColor="";
     }
 }
 
-function muteRemoteSpeakerToggle() {
-    var b = document.getElementById('muteRemoteSpeaker');
-    //var callerVideo = document.getElementById('callerVideo');
-    if (b.innerHTML == "Mute @ Robot") {
-        muteRemoteSpeaker(true);
+function muteThemRobotToggle() {
+    var b = document.getElementById('muteThem');
+
+    if (b.innerHTML == "Mute Them") {
+        muteThemRobot(true);
+        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE_ME_ROBOT");
     }
     else {
-        muteRemoteSpeaker(false);
+        muteThemRobot(false);
+        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE_ME_ROBOT");
     }
 }
+
 
 function setTheirVolume(newValue) {
     var video = document.getElementById('callerVideo');
@@ -193,11 +222,21 @@ function gotMessageFromPeer(who, msgType, content) {
     console.log("who:", who, "msgType:", msgType, "content:", content);
 
     if( msgType == "message" ) {
-        if( content == "MUTE")  {
-            muteThem(true);
+        if( content == "MUTE_ME_ROBOT")  {
+            if(gControl.IAmTheRobot) {
+                muteThemRobot(true);
+            }
+            else {
+                muteMeRobot(true);
+            }
         }
-        else if( content == "UNMUTE") {
-            muteThem(false);
+        else if( content == "UNMUTE_ME_ROBOT") {
+            if(gControl.IAmTheRobot) {
+                muteThemRobot(false);
+            }
+            else {
+                muteMeRobot(false);
+            }
         }
         else {
             console.log("Unknown message from peer");
@@ -255,6 +294,7 @@ function callAcceptor(easyrtcid, acceptorCB)
         console.log("I am the robot");
         sendServerMessage('callAccepted', {'who':'remote'});
         gControl.IAmTheRobot = true;
+        gControl.otherEasyrtcid = easyrtcid;
     }
     else {
         acceptorCB(false);
