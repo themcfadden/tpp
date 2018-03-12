@@ -113,19 +113,16 @@
 
               <button class="button_format" onClick="muteMeRobotToggle()" id="muteMeRobot">Mute Me @ Robot</button>
 
+              <div class="slide_input">
+                <label for="volume-control-robot">Volume</label>
+                <input class="slide_input" id="volume-control-robot" type="range" min="0" max="100" step="1"
+                       oninput="sendTheirVolumeRobot(this.value)" onchange="sendTheirVolumeRobot(this.value)"></input>
+              </div>
             </div>
           </div>
 
           <script>
-
-            var container1MidPoint = document.getElementById("container1").clientWidth/2;
-            var container1BottomPoint = document.getElementById("container1").clientHeight - 30;
-            virtualJoyStickWorker1(container1MidPoint,container1BottomPoint);
-
-            var container2MidX = document.getElementById("container2").clientWidth/2;
-            var container2MidY = document.getElementById("container2").clientHeight/2;
-            virtualJoyStickWorker2(container2MidX,container2MidY);
-
+            startJoystickWorkers();
           </script>
           
 	</body>

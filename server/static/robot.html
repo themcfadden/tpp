@@ -81,7 +81,10 @@
         <div class="slide_input">
           <label for="volume-control">Volume</label>
           <input id="volume-control" type="range" min="0" max="100" step="1"
+                 oninput="sendTheirVolumeRobot(this.value)" onchange="sendTheirVolumeRobot(this.value)"></input>
+                 <!--
                  oninput="setTheirVolume(this.value)" onchange="setTheirVolume(this.value)"></input>
+                   -->
         </div>
       </div>
       <div class="box d" id="result1"></div>

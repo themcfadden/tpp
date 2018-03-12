@@ -10,7 +10,8 @@ var gControl =
         otherEasyrtcid: null,
     };
 var mediaStreams = []
-
+const MsgTypeMuteControl = "MSG_MUTE_CONTROL";
+const MsgTypeRobotVolumeControl = "MSG_ROBOT_VOLUME_CONTROL";
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
     var video = document.getElementById('callerVideo');
@@ -158,11 +159,11 @@ function muteMeRobotToggle() {
 
     if (b.innerHTML == "Mute Me @ Robot") {
         muteMeRobot(true);
-        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE_ME_ROBOT");
+        sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeMuteControl, "MUTE_ME_ROBOT");
     }
     else {
         muteMeRobot(false);
-        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE_ME_ROBOT");
+        sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeMuteControl, "UNMUTE_ME_ROBOT");
     }
 }
 
@@ -186,11 +187,11 @@ function muteThemRobotToggle() {
 
     if (b.innerHTML == "Mute Them") {
         muteThemRobot(true);
-        sendMessageToPeer(gControl.otherEasyrtcid, "MUTE_ME_ROBOT");
+        sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeMuteControl, "MUTE_ME_ROBOT");
     }
     else {
         muteThemRobot(false);
-        sendMessageToPeer(gControl.otherEasyrtcid, "UNMUTE_ME_ROBOT");
+        sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeMuteControl, "UNMUTE_ME_ROBOT");
     }
 }
 
@@ -198,6 +199,15 @@ function muteThemRobotToggle() {
 function setTheirVolume(newValue) {
     var video = document.getElementById('callerVideo');
     video.volume = newValue / 100;
+}
+
+function setMyVolumeRobot(newValue) {
+    var video = document.getElementById('selfVideo');
+    video.volume = newValue / 100;
+}
+
+function sendTheirVolumeRobot(newValue) {
+    sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeRobotVolumeControl, newValue);
 }
 
 function clearConnectList() {
@@ -210,18 +220,18 @@ function clearConnectList() {
     }
 }
 
-function sendMessageToPeer(otherEasyrtcid, message) {
-    console.log("sendMessageToPeer(), other:", otherEasyrtcid, "message:", message);
+function sendMessageToPeer(otherEasyrtcid, msgType, message) {
+    console.log("sendMessageToPeer(), other:", otherEasyrtcid, "type:", msgType, "message:", message);
 
     if( otherEasyrtcid != null) {
-        easyrtc.sendDataWS(otherEasyrtcid, "message", message);
+        easyrtc.sendDataWS(otherEasyrtcid, msgType, message);
     }
 }
 
 function gotMessageFromPeer(who, msgType, content) {
     console.log("who:", who, "msgType:", msgType, "content:", content);
 
-    if( msgType == "message" ) {
+    if( msgType == MsgTypeMuteControl ) {
         if( content == "MUTE_ME_ROBOT")  {
             if(gControl.IAmTheRobot) {
                 muteThemRobot(true);
@@ -240,6 +250,16 @@ function gotMessageFromPeer(who, msgType, content) {
         }
         else {
             console.log("Unknown message from peer");
+        }
+    }
+    else if( msgType == MsgTypeRobotVolumeControl ) {
+        if(gControl.IAmTheRobot) {
+            setTheirVolume(content);
+            document.getElementById('volume-control').value = content;    
+        }
+        else {
+            setMyVolumeRobot(content);
+            document.getElementById('volume-control-robot').value = content;
         }
     }
 }
@@ -343,6 +363,7 @@ function getParameterByName(name, url) {
 // VirtualJoystick Worker
 //
 function virtualJoyStickWorker1(xstart, ystart) {
+    gControl.joystick1 = null;
     console.log("touchscreen is", VirtualJoystick.touchScreenAvailable() ? "available" : "not available");
     
     //var joystick1	= new VirtualJoystick({
@@ -368,6 +389,7 @@ function virtualJoyStickWorker1(xstart, ystart) {
 }
 
 function virtualJoyStickWorker2(xstart, ystart) {
+    gControl.joystick2 = null;
     gControl.joystick2	= new VirtualJoystick({
         container	: document.getElementById('container2'),
         strokeStyle     : 'red',
@@ -389,16 +411,13 @@ function virtualJoyStickWorker2(xstart, ystart) {
     }, 1/30 * 1000);
 }
 
-//function setRemoteMute(muteFlag) {
-//    var muteMessage = {'localSpeaker':muteFlag};
-//    sendServerMessage('localSpeaker', muteMessage);
-//}
-
-// See http://marcj.github.io/css-element-queries/
-function updateSize() {
-    var szx = document.getElementById("container1").clientWidth;
-    var szy = document.getElementById("container1").clientHeight;
-    var res = document.getElementById('result2');
-    res.innerHTML = '<b>X,Y: ' + szx + ',' + szy;
-
+function startJoystickWorkers() {
+    var container1MidPoint = document.getElementById("container1").clientWidth/2;
+    var container1BottomPoint = document.getElementById("container1").clientHeight - 30;
+    virtualJoyStickWorker1(container1MidPoint,container1BottomPoint);
+    
+    var container2MidX = document.getElementById("container2").clientWidth/2;
+    var container2MidY = document.getElementById("container2").clientHeight/2;
+    virtualJoyStickWorker2(container2MidX,container2MidY);
 }
+
