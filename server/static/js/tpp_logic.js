@@ -12,6 +12,7 @@ var gControl =
 var mediaStreams = []
 const MsgTypeMuteControl = "MSG_MUTE_CONTROL";
 const MsgTypeRobotVolumeControl = "MSG_ROBOT_VOLUME_CONTROL";
+const MsgTypeRobotOnScreenMessage = "MSG_ROBOT_ON_SCREEN_MESSAGE";
 
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
     var video = document.getElementById('callerVideo');
@@ -262,6 +263,10 @@ function gotMessageFromPeer(who, msgType, content) {
             document.getElementById('volume-control-robot').value = content;
         }
     }
+    else if ( msgType == MsgTypeRobotOnScreenMessage ) {
+        var o = document.getElementById('overlayMessage');
+        o.innerHTML = content;
+    }
 }
 
 function convertListToButtons (roomName, data, isPrimary) {
@@ -318,7 +323,6 @@ function callAcceptor(easyrtcid, acceptorCB)
     }
     else {
         acceptorCB(false);
-        
     }
 }
 
@@ -357,6 +361,15 @@ function getParameterByName(name, url) {
     if (!results) return null;
     if (!results[2]) return '';
     return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
+
+function setOverlayMessage() {
+    var o = document.getElementById('overlayMessage');
+    var msg = document.getElementById('overlayMessageInput').value;
+    o.innerHTML = msg;
+    document.getElementById('overlayMessageInput').value = "";
+
+    sendMessageToPeer(gControl.otherEasyrtcid, MsgTypeRobotOnScreenMessage, msg);
 }
 
 //

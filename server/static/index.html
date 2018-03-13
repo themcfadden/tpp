@@ -32,18 +32,23 @@
 	     color: #fff;
 	     border-radius: 5px;
 	     padding: 10px;
+         position: relative;
       }
 
       .a {
          grid-column: 1/5;
          grid-row: 1/5;
       }
+      .msg {
+         grid-column: 1/5;
+         grid-row: 5/5;
+      }
       .b {
-         grid-column: 5 ;
+         grid-column: 5;
          grid-row: 1;
       }
       .c {
-         grid-column: 5 ;
+         grid-column: 5;
          grid-row: 2 ;
       }
       .d {
@@ -51,7 +56,6 @@
          grid-row: 3;
          min-height: 128px;
          min-width:  128px;
-         <!--text-align: center;-->
       }
       .e {
          grid-column: 5;
@@ -64,7 +68,7 @@
          height: auto;
       }
       .button_format {
-         width: 75%
+         width: 75%;
       }
 
       .box_label {
@@ -73,57 +77,75 @@
       .slide_input {
          display: inline-block;
          width: 80%;
-         }
+      }
+
+      #overlayMessage {
+         position: absolute;
+         top: 100;
+         left: 10;
+         color rgb(230, 200, 98);
+         z-index:100;
+         text-align: center;
+         font-size: 300%;
+      }
 
     </style>
 	</head>
 	<body onload="connect();">
-          
-          <div class="wrapper">
-            <div class="box a"  id="container1">
-              <video id="callerVideo" autoplay="autoplay"></video>
-            </div>
-            <div class="box b">
-              <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
-            </div>
-            <div class="box c" id="connectControls">
-              <div id="iam">Not connected...</div>
-              <br />
-              <strong>Connect to:</strong>
-              <div id="otherClients"></div>
-            </div>
-            <div class="box d" id="container2">
-            </div>
-            <div class="box e" id="soundCountrols" style="text-align:center;">
-              <div class="box_label">
-                <label style="text-align:left;">Local:</label>
-              </div>
-              <button class="button_format" onClick="muteAllToggle()" id="muteAll">Mute All</button>
-              <button class="button_format" onClick="muteMeToggle()" id="muteMe">Mute Me</button>
-              <button class="button_format" onClick="muteThemToggle()" id="muteThem">Mute Them</button>
-              <div class="slide_input">
-                <label for="volume-control">Volume</label>
-                <input class="slide_input" id="volume-control" type="range" min="0" max="100" step="1"
-                       oninput="setTheirVolume(this.value)" onchange="setTheirVolume(this.value)"></input>
-              </div>
-
-              <div class="box_label">
-                <label style="text-align:left;">Remote:</label>
-              </div>
-
-              <button class="button_format" onClick="muteMeRobotToggle()" id="muteMeRobot">Mute Me @ Robot</button>
-
-              <div class="slide_input">
-                <label for="volume-control-robot">Volume</label>
-                <input class="slide_input" id="volume-control-robot" type="range" min="0" max="100" step="1"
-                       oninput="sendTheirVolumeRobot(this.value)" onchange="sendTheirVolumeRobot(this.value)"></input>
-              </div>
-            </div>
+      <div class="wrapper">
+        <div class="box a" id="container1">
+          <div id="overlayMessage"></div>              
+          <video id="callerVideo" autoplay="autoplay" width="100%"></video>
+        </div>
+        <div class="box msg">
+          <div>
+            <button type="button" onClick="setOverlayMessage()" id="overlayMessageButton">On Screen</button>
+            <input id="overlayMessageInput" type="text" style="width:85%;"
+                   onkeydown = "if (event.keyCode == 13) setOverlayMessage();"></input>
           </div>
-
-          <script>
-            startJoystickWorkers();
-          </script>
+        </div>
+        <div class="box b">
+          <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
+        </div>
+        <div class="box c" id="connectControls">
+          <div id="iam">Not connected...</div>
+          <br />
+          <div id="connectMsg">Connect to:</div>
+          <div id="otherClients"></div>
+        </div>
+        <div class="box d" id="container2">
+        </div>
+        <div class="box e" id="soundCountrols" style="text-align:center;">
+          <div class="box_label">
+            <label style="text-align:left;">Local:</label>
+          </div>
+          <button class="button_format" onClick="muteAllToggle()" id="muteAll">Mute All</button>
+          <button class="button_format" onClick="muteMeToggle()" id="muteMe">Mute Me</button>
+          <button class="button_format" onClick="muteThemToggle()" id="muteThem">Mute Them</button>
+          <div class="slide_input">
+            <label for="volume-control">Volume</label>
+            <input class="slide_input" id="volume-control" type="range" min="0" max="100" step="1"
+                   oninput="setTheirVolume(this.value);" onchange="setTheirVolume(this.value);"></input>
+          </div>
           
+          <div class="box_label">
+            <label style="text-align:left;">Remote:</label>
+          </div>
+          <button class="button_format" onClick="muteMeRobotToggle();" id="muteMeRobot">Mute Me @ Robot</button>
+          
+          <div class="slide_input">
+            <label for="volume-control-robot">Volume</label>
+            <input class="slide_input" id="volume-control-robot" type="range" min="0" max="100" step="1"
+                   oninput="sendTheirVolumeRobot(this.value);" onchange="sendTheirVolumeRobot(this.value);"></input>
+          </div>
+        </div>
+        <div class="box f" id="container2">
+        </div>
+      </div>
+      
+      <script>
+        startJoystickWorkers();
+      </script>
+      
 	</body>
 </html>

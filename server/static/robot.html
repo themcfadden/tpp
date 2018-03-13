@@ -17,21 +17,21 @@
          display: grid;
          grid-gap: 3px;
          grid-template-columns: repeat(5, 1fr);
+         grid-template-rows: repeat(2, 1fr);
          background-color: #fff;
          color: #444;
       }
 
       .box {
          background-color: #444;
-	 color: #fff;
-	 border-radius: 5px;
-	 padding: 10px;
-	 <!-- font-size: 100%; -->
+	     color: #fff;
+	     border-radius: 5px;
+	     padding: 10px;
+         position: relative;
       }
-
       .a {
          grid-column: 1/5;
-         grid-row: 1/5;
+         grid-row: 1/3;
       }
       .b {
          grid-column: 5 ;
@@ -41,54 +41,44 @@
          grid-column: 5 ;
          grid-row: 2 ;
       }
-      .d {
-         grid-column: 5;
-         grid-row: 3;
-      }
-      .e {
-         grid-column: 5;
-         grid-row: 4;
-      }
       .slide_input {
          display: inline-block;
-         //width: 60%;
       }
       .button_format {
          width: 75%;
-         background-color: grey; color: black;
+         background-color: grey;
+         color: black;
       }
-      .button_format_warn {
-         width: 75%;
-         background-color: red; color: black;
+
+      #overlayMessage {
+         position: absolute;
+         top: 100;
+         left: 10;
+         color rgb(230, 200, 98);
+         z-index:100;
+         text-align: center;
+         font-size: 300%;
       }
 
     </style>
-    
   </head>
   <body onload="connect();">
     <div class="wrapper">
-      <div class="box a">
-        <video id="callerVideo" autoplay="autoplay" width="100%"></video>
+      <div class="box a" id="container1" style="position: relative;">
+        <div id="overlayMessage"></div>              
+        <video id="callerVideo" autoplay="autoplay" width="100%;"></video>
       </div>
       <div class="box b">
         <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
         <div id="iam">Not connected...</div>
       </div>
-      
       <div class="box c" id="connectControls" style="text-align:center;">
-        <button class="button_format" onClick="muteThemRobotToggle()" id="muteThem">Mute Them</button>
-
+        <button class="button_format" onClick="muteThemRobotToggle();" id="muteThem">Mute Them</button>
         <div class="slide_input">
           <label for="volume-control">Volume</label>
           <input id="volume-control" type="range" min="0" max="100" step="1"
-                 oninput="sendTheirVolumeRobot(this.value)" onchange="sendTheirVolumeRobot(this.value)"></input>
-                 <!--
-                 oninput="setTheirVolume(this.value)" onchange="setTheirVolume(this.value)"></input>
-                   -->
+                 oninput="sendTheirVolumeRobot(this.value);" onchange="sendTheirVolumeRobot(this.value);"></input>
         </div>
-      </div>
-      <div class="box d" id="result1"></div>
-      <div class="box e" id="result2">
       </div>
     </div>
   </body>
