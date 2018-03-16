@@ -141,9 +141,9 @@ function muteAllToggle() {
 }
 
 function muteMeRobot(muteFlag) {
-    var callerVideo = document.getElementById('callerVideo');
-    callerVideo.muted = muteFlag;
-
+    // Doesn't actually control muting, must color of button.
+    // Mute control is expected to be controlled at robot end
+    
     var b = document.getElementById('muteMeRobot');
     if (muteFlag) {
         b.innerHTML = "UnMute Me @ Robot";
@@ -171,6 +171,8 @@ function muteMeRobotToggle() {
 function muteThemRobot(muteFlag) {
     var callerVideo = document.getElementById('callerVideo');
     callerVideo.muted = muteFlag;
+    // doesn't work on robot side!
+    //easyrtc.enableAudio(muteFlag == false);
 
     var b = document.getElementById('muteThem');
     if (muteFlag) {
