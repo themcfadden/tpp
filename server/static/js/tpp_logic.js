@@ -8,6 +8,7 @@ var gControl =
         joystick2: null,
         IAmTheRobot: false,
         otherEasyrtcid: null,
+        joystickWorkersRunning: false,
     };
 var mediaStreams = []
 const MsgTypeMuteControl = "MSG_MUTE_CONTROL";
@@ -17,6 +18,7 @@ const MsgTypeRobotOnScreenMessage = "MSG_ROBOT_ON_SCREEN_MESSAGE";
 easyrtc.setStreamAcceptor( function(callerEasyrtcid, stream) {
     var video = document.getElementById('callerVideo');
     easyrtc.setVideoObjectSrc(video, stream);
+    startJoystickWorkers();
 });
 
 easyrtc.setOnStreamClosed( function (callerEasyrtcid) {
@@ -39,6 +41,7 @@ function connect() {
     // Set up all media sources
     easyrtc.getVideoSourceList( function(list) {
         for ( i = 0; i < list.length; i++ ) {
+            console.log("Init camera"+i);
             easyrtc.initMediaSource(
                 function(mediaStream) {
                     mediaStreams[i] = mediaStream;
@@ -427,12 +430,21 @@ function virtualJoyStickWorker2(xstart, ystart) {
 }
 
 function startJoystickWorkers() {
+    if(gControl.joystickWorkersRunning) {
+        console.log("Joystick Workers ALREADY running");
+        return;
+    }
+    else {
+        console.log("Joystick Workers started");
+    }
     var container1MidPoint = document.getElementById("container1").clientWidth/2;
-    var container1BottomPoint = document.getElementById("container1").clientHeight - 30;
+    var clientH = document.getElementById("container1").clientHeight;
+    var container1BottomPoint = clientH - clientH/8;
     virtualJoyStickWorker1(container1MidPoint,container1BottomPoint);
     
     var container2MidX = document.getElementById("container2").clientWidth/2;
     var container2MidY = document.getElementById("container2").clientHeight/2;
     virtualJoyStickWorker2(container2MidX,container2MidY);
+    gControl.joystickWorkersRunning = true;
 }
 

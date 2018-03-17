@@ -22,7 +22,8 @@
       .wrapper {
          display: grid;
          grid-gap: 3px;
-         grid-template-columns: repeat(5, 1fr);
+         
+      //grid-template-rows: repeat(3, 1fr);
          background-color: #fff;
          color: #444;
       }
@@ -34,37 +35,39 @@
 	     padding: 10px;
          position: relative;
       }
-
       .a {
-         grid-column: 1/5;
-         grid-row: 1/5;
-      }
-      .msg {
-         grid-column: 1/5;
-         grid-row: 5/5;
+         grid-column: 1 / span 4;
+         grid-row: 1 / span 3;
       }
       .b {
-         grid-column: 5;
-         grid-row: 1;
+         grid-column: 1 / span 4;
+         grid-row: 5;
       }
       .c {
-         grid-column: 5;
-         grid-row: 2 ;
+         grid-column: 1 / span 2;
+         grid-row: 4;
       }
       .d {
+         grid-column: 3 / span 2;
+         grid-row: 4;
+      }
+      .e {
+         grid-column: 5;
+         grid-row: 1 / span 2 ;
+      }
+      .f {
          grid-column: 5;
          grid-row: 3;
          min-height: 128px;
          min-width:  128px;
       }
-      .e {
+      .g {
          grid-column: 5;
-         grid-row: 4;
-         min-height: 128px;
-         min-width:  128px;
+         grid-row: 4 / span 2;
       }
       .video {
-         width: 100%;
+      //width: 100%;
+         width: auto;
          height: auto;
       }
       .button_format {
@@ -97,25 +100,15 @@
           <div id="overlayMessage"></div>              
           <video id="callerVideo" autoplay="autoplay" width="100%"></video>
         </div>
-        <div class="box msg">
+        <div class="box b">
           <div>
             <button type="button" onClick="setOverlayMessage()" id="overlayMessageButton">On Screen</button>
             <input id="overlayMessageInput" type="text" style="width:85%;"
                    onkeydown = "if (event.keyCode == 13) setOverlayMessage();"></input>
           </div>
         </div>
-        <div class="box b">
-          <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
-        </div>
-        <div class="box c" id="connectControls">
-          <div id="iam">Not connected...</div>
-          <br />
-          <div id="connectMsg">Connect to:</div>
-          <div id="otherClients"></div>
-        </div>
-        <div class="box d" id="container2">
-        </div>
-        <div class="box e" id="soundCountrols" style="text-align:center;">
+
+        <div class="box c" id="soundCountrols" style="text-align:center;">
           <div class="box_label">
             <label style="text-align:left;">Local:</label>
           </div>
@@ -127,25 +120,31 @@
             <input class="slide_input" id="volume-control" type="range" min="0" max="100" step="1"
                    oninput="setTheirVolume(this.value);" onchange="setTheirVolume(this.value);"></input>
           </div>
-          
+        </div>
+        
+        <div class="box d" id="soundControls" style="text-align:center;">
           <div class="box_label">
             <label style="text-align:left;">Remote:</label>
           </div>
           <button class="button_format" onClick="muteMeRobotToggle();" id="muteMeRobot">Mute Me @ Robot</button>
-          
           <div class="slide_input">
             <label for="volume-control-robot">Volume</label>
             <input class="slide_input" id="volume-control-robot" type="range" min="0" max="100" step="1"
                    oninput="sendTheirVolumeRobot(this.value);" onchange="sendTheirVolumeRobot(this.value);"></input>
           </div>
         </div>
-        <div class="box f" id="container2">
+
+        <div class="box e">
+          <video id="selfVideo" autoplay="autoplay" class="easyrtcMirror" muted="muted" volume="0" width="100%"></video>
+        </div>
+        <div class="box f" id="connectControls">
+          <div id="iam">Not connected...</div>
+          <br />
+          <div id="connectMsg">Connect to:</div>
+          <div id="otherClients"></div>
+        </div>
+        <div class="box g" id="container2">
         </div>
       </div>
-      
-      <script>
-        startJoystickWorkers();
-      </script>
-      
 	</body>
 </html>
