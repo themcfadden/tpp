@@ -1,0 +1,19 @@
+#!/bin/bash
+
+cd /home/mattmc/projects/tpp/server
+export DISPLAY=:0.0
+
+if pidof -s server_ssl > /dev/null; then
+    echo 'server_ssl running'
+else
+    echo 'Starting -> server_ssl'
+    node server_ssl.js &
+fi
+
+if ps -ef | grep -v grep | grep 'firefox https://localhost:8443' > /dev//null; then
+    echo 'firefox running'
+else
+    echo 'Starting -> firefox'
+    firefox https://localhost:8443/robot.html > /dev/null &
+fi
+

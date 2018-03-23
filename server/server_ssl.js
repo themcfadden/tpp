@@ -10,7 +10,7 @@ var SerialPort = require("serialport");
 var serialCommand = Buffer.from([0xAA, 0x0C, 0x04, 0x00, 0x00, 0x00]);
 
 // Set process name
-process.title = "node-easyrtc";
+process.title = "server_ssl";
 
 // Setup and configure Express http server. Expect a subfolder called "static" to be the web root.
 var app = express();
