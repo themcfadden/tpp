@@ -4,12 +4,10 @@ cd /home/mattmc/projects/tpp/server
 
 export DISPLAY=:0.0
 
-sudo killall node-easyrtc > /dev/null
-
+sudo killall server_ssl > /dev/null
 sleep 1
 
 sudo killall firefox > /dev/null
-
 sleep 3
 
 node server_ssl.js &

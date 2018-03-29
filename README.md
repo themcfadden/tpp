@@ -53,6 +53,10 @@ Caviots, Assumptions, Limitations
 
 Status
 ----------------------------------
+#### 2018-03-38
+  Lot of small tweaks. I'm using it lots for my remote work.
+  Still not moving around, only pan/tilt camera in my cubical right now.
+
 #### 2017-09-30
   On screen mouse controls working.
   Add map function to scale input to needed output ranges.
@@ -78,8 +82,13 @@ To Do List
 - [X] Figure out if possible to set name instead of using the randomly generated name.
 - [X] Get the serial port working via nodejs.
 - [X] Implement web to serial connection.
-- [ ] Write code for controlling servos.
+- [X] Write code for controlling servos.
 - [ ] Write code for controlling motors.
 - [X] Set default remote name to something like "remote_bot"
-- [ ] Implement disconnect on client side.
+- [X] Add remote control of volume.
+- [ ] Implement heartbeat/disconnect detection.
+- [ ] Implement disconnect handling on client side.
+- [ ] Put some sort of mobile base together so I have something to control.
+- [ ] It looks like remote speakers will be helpful.
+- [ ] Consider external microphone.
 
