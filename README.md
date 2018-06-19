@@ -91,6 +91,6 @@ To Do List
 - [ ] Put some sort of mobile base together so I have something to control.
 - [ ] It looks like remote speakers will be helpful.
 - [ ] Consider external microphone.
-- [ ] Figure out STUN and TURN servers so it can be used through firewalls
+- [ ] Figure out STUN and TURN servers so it can be used through NAT and firewalls
 - [ ] Add some sort of authentication
 
