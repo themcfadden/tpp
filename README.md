@@ -93,4 +93,5 @@ To Do List
 - [ ] Consider external microphone.
 - [ ] Figure out STUN and TURN servers so it can be used through NAT and firewalls
 - [ ] Add some sort of authentication
+- [ ] Fix certificate to avoid browser warnings.
 
