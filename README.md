@@ -2,24 +2,28 @@
 
 A WebRTC-based telepresence robot. A remote pilot connects via browser, controls drive/camera/laser in real-time, and sees/hears the robot's environment. The robot auto-accepts connections and displays the pilot's video + audio on its own screen.
 
-## Quick Start (LAN Development)
+## Development Setup
 
-### Linux build dependencies
+- **demeter** (macOS) — main development machine; `make build` / `make run` work without any extra deps
+- **fuego** (Ubuntu 24.04) — Linux test machine; requires system libs before building:
 
 ```bash
-# Ubuntu/Debian — works on both x86 and Raspberry Pi OS (bookworm)
+# On fuego (first time only):
 sudo apt install libvpx-dev libasound2-dev
 ```
 
-> **RPi optimisation note:** The current video codec is VP8 (software encoding via libvpx), which works on both x86 and ARM. When development moves to testing on real RPi hardware, this can be swapped for the Broadcom MMAL hardware H.264 encoder (`pion/mediadevices/pkg/codec/mmal`) for significantly better performance. See `robot/internal/media/media.go` for details.
-
+Deploy source from demeter and build+run on fuego:
 ```bash
-# Build and run the robot process (requires Go 1.21+)
-make run
+# From demeter:
+make deploy-src        # rsyncs source and builds on fuego (mattmc@fuego by default)
 
-# Open the pilot UI in a browser:
-open http://localhost:8080
+# Or SSH to fuego and run directly:
+make run
+# Open pilot UI: http://fuego:8080
 ```
+
+> **RPi optimisation note:** VP8 (libvpx software encoding) works on both x86 and Raspberry Pi OS. When development moves to the real RPi, swap to the Broadcom MMAL hardware H.264 encoder for better performance — see `robot/internal/media/media.go` for instructions.
+
 
 ## Hardware
 

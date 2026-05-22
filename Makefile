@@ -28,7 +28,7 @@ lint:
 # Requires Go to be installed on the remote machine.
 # Usage:  make deploy-src LINUX_HOST=user@192.168.1.50
 
-LINUX_HOST ?= user@linux-machine.local
+LINUX_HOST ?= mattmc@fuego
 LINUX_DIR  := ~/tppv4
 
 .PHONY: deploy-src
