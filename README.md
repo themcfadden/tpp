@@ -4,6 +4,15 @@ A WebRTC-based telepresence robot. A remote pilot connects via browser, controls
 
 ## Quick Start (LAN Development)
 
+### Linux build dependencies
+
+```bash
+# Ubuntu/Debian — works on both x86 and Raspberry Pi OS (bookworm)
+sudo apt install libvpx-dev libasound2-dev
+```
+
+> **RPi optimisation note:** The current video codec is VP8 (software encoding via libvpx), which works on both x86 and ARM. When development moves to testing on real RPi hardware, this can be swapped for the Broadcom MMAL hardware H.264 encoder (`pion/mediadevices/pkg/codec/mmal`) for significantly better performance. See `robot/internal/media/media.go` for details.
+
 ```bash
 # Build and run the robot process (requires Go 1.21+)
 make run

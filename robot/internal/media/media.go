@@ -1,5 +1,16 @@
 package media
 
+// VP8 software encoding via libvpx + ALSA audio capture.
+//
+// Required system packages (Ubuntu/Debian — works on both x86 and Raspberry Pi OS):
+//
+//	sudo apt install libvpx-dev libasound2-dev
+//
+// TODO(rpi-optimisation): When development moves to testing on real RPi hardware,
+// swap vpx.NewVP8Params() for github.com/pion/mediadevices/pkg/codec/mmal to use
+// the Broadcom VideoCore hardware H.264 encoder instead of software VP8.
+// MMAL requires: sudo apt install libraspberrypi-dev  (RPi OS only, won't build on x86)
+
 import (
 	"context"
 	"fmt"
@@ -19,8 +30,8 @@ import (
 
 // Controller captures local camera + mic and can add them to a peer connection.
 type Controller struct {
-	cfg          config.Config
-	stream       mediadevices.MediaStream
+	cfg           config.Config
+	stream        mediadevices.MediaStream
 	codecSelector *mediadevices.CodecSelector
 }
 
@@ -55,7 +66,7 @@ func New(cfg config.Config) (*Controller, error) {
 		return nil, fmt.Errorf("media: GetUserMedia: %w", err)
 	}
 
-	log.Printf("media: camera and microphone opened (%s)", cfg.CameraDevice)
+	log.Printf("media: camera and microphone opened (camera: %s)", cfg.CameraDevice)
 	return &Controller{cfg: cfg, stream: stream, codecSelector: codecSelector}, nil
 }
 
@@ -84,10 +95,9 @@ func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
 func NewStub() *Controller { return &Controller{} }
 
 // PlayPilotAudio receives the pilot's audio track and plays it through the local speaker.
-// This is a stub — in production, decode Opus RTP packets and pipe to ALSA via gopxl/beep.
+// TODO Phase 9: decode Opus RTP → speaker output (e.g. via gopxl/beep → ALSA).
 func (c *Controller) PlayPilotAudio(_ context.Context, track *webrtc.TrackRemote) {
 	log.Printf("media: pilot audio track received (codec: %s) — playback not yet implemented", track.Codec().MimeType)
-	// TODO Phase 9: decode Opus RTP → gopxl/beep → ALSA speaker output.
 	for {
 		if _, _, err := track.ReadRTP(); err != nil {
 			log.Printf("media: pilot audio read error: %v", err)
