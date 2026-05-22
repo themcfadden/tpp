@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>TPPV4 — Telepresence Pilot</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Robot camera feed (fullscreen background) -->
+  <video id="robotVideo" autoplay playsinline></video>
+
+  <!-- Robot audio — must NOT be muted -->
+  <audio id="robotAudio" autoplay playsinline></audio>
+
+  <!-- Pilot's own camera preview (picture-in-picture, top-right) -->
+  <video id="localVideo" autoplay playsinline muted></video>
+
+  <!-- HUD overlays -->
+  <div id="statusBar">
+    <span id="connStatus" class="status disconnected">⬤ Disconnected</span>
+    <span id="laserStatus" class="laser-off">🔴 Laser OFF</span>
+  </div>
+
+  <!-- Drive joystick zone (bottom-left) -->
+  <div id="drivePad" class="pad">
+    <div id="driveKnob" class="knob"></div>
+    <span class="pad-label">DRIVE</span>
+  </div>
+
+  <!-- Camera pan/tilt joystick zone (bottom-right) -->
+  <div id="cameraPad" class="pad">
+    <div id="cameraKnob" class="knob"></div>
+    <span class="pad-label">CAMERA</span>
+  </div>
+
+  <!-- Laser toggle button -->
+  <button id="laserBtn" class="laser-btn">LASER</button>
+
+  <script type="module" src="js/protocol.js"></script>
+  <script type="module" src="js/controls.js"></script>
+  <script type="module" src="js/ui.js"></script>
+  <script type="module" src="js/webrtc.js"></script>
+</body>
+</html>

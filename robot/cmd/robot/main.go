@@ -1,0 +1,104 @@
+package main
+
+import (
+"context"
+"fmt"
+"log"
+"net/http"
+"os"
+"os/signal"
+"syscall"
+
+"github.com/mattmc/tppv4/robot/config"
+"github.com/mattmc/tppv4/robot/internal/control"
+"github.com/mattmc/tppv4/robot/internal/hardware/maestro"
+"github.com/mattmc/tppv4/robot/internal/hardware/motor"
+"github.com/mattmc/tppv4/robot/internal/media"
+webrtcpeer "github.com/mattmc/tppv4/robot/internal/webrtc"
+)
+
+func main() {
+cfg, err := config.Load("config.yaml")
+if err != nil {
+log.Fatalf("config: %v", err)
+}
+
+// Maestro servo controller -- non-fatal if port unavailable (e.g. dev machine)
+var maestroCtrl *maestro.Maestro
+if cfg.MaestroPort != "" && cfg.MaestroPort != "none" {
+maestroCtrl, err = maestro.New(cfg.MaestroPort)
+if err != nil {
+log.Printf("maestro: WARNING -- could not open %s: %v (servo/laser disabled)", cfg.MaestroPort, err)
+} else {
+defer maestroCtrl.Close()
+_ = maestroCtrl.Center(uint8(cfg.MaestroPanChannel))
+_ = maestroCtrl.Center(uint8(cfg.MaestroTiltChannel))
+_ = maestroCtrl.SetLaser(uint8(cfg.MaestroLaserChannel), false)
+log.Printf("maestro: connected on %s, servos centered", cfg.MaestroPort)
+}
+} else {
+log.Printf("maestro: no port configured -- servo/laser disabled")
+}
+if maestroCtrl == nil {
+maestroCtrl = &maestro.Maestro{} // zero value -- all methods are no-ops when port is nil
+}
+
+// Motor controller
+var motorCtrl motor.MotorController
+switch cfg.MotorDriver {
+case "uart":
+motorCtrl, err = motor.NewUARTMotorController(cfg.MotorPort, cfg.MotorBaud)
+if err != nil {
+log.Fatalf("motor: %v", err)
+}
+defer motorCtrl.Close()
+log.Printf("motor: UART driver on %s @ %d baud", cfg.MotorPort, cfg.MotorBaud)
+default:
+motorCtrl = &motor.NoOpMotorController{}
+log.Printf("motor: using no-op driver (set MOTOR_DRIVER=uart for real hardware)")
+}
+
+// Command dispatcher: routes data channel messages to hardware
+dispatcher := control.New(cfg, maestroCtrl, motorCtrl)
+
+// Media: camera + microphone capture
+mediaCtrl, err := media.New(cfg)
+if err != nil {
+// Non-fatal on dev machines without camera hardware
+log.Printf("media: WARNING -- camera/mic unavailable: %v", err)
+mediaCtrl = media.NewStub()
+}
+
+// WebRTC peer manager
+peerManager := webrtcpeer.New(cfg, dispatcher, mediaCtrl)
+
+// Pilot dir: configurable so the binary can be run from any directory.
+// Default "pilot" resolves relative to cwd (works with `make run` from repo root).
+pilotDir := os.Getenv("PILOT_DIR")
+if pilotDir == "" {
+pilotDir = "pilot"
+}
+
+mux := http.NewServeMux()
+mux.Handle("/ws", peerManager)
+mux.Handle("/display", http.FileServer(http.Dir(pilotDir)))
+mux.Handle("/", http.FileServer(http.Dir(pilotDir)))
+
+addr := fmt.Sprintf(":%d", cfg.HTTPPort)
+server := &http.Server{Addr: addr, Handler: mux}
+
+ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+defer stop()
+
+go func() {
+log.Printf("robot: listening on http://0.0.0.0%s", addr)
+if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+log.Fatalf("server: %v", err)
+}
+}()
+
+<-ctx.Done()
+log.Printf("robot: shutting down...")
+_ = motorCtrl.Stop(context.Background())
+_ = server.Shutdown(context.Background())
+}

@@ -1,0 +1,19 @@
+# Binaries
+tppv4-robot
+tppv4-robot-arm64
+
+# Go build artifacts
+robot/vendor/
+
+# Config (may contain secrets)
+config.yaml
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log

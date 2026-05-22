@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TPPV4 — Robot Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    This page runs in Chromium kiosk mode on the robot's HDMI screen.
+    It displays the pilot's incoming video fullscreen.
+    The robot's Go process serves the pilot's audio track to the ALSA speaker
+    directly (via gopxl/beep) — audio is NOT routed through this page to
+    avoid double-playback.
+  -->
+  <video id="pilotVideo" autoplay playsinline muted></video>
+  <script>
+    // The robot's Go process will relay the pilot's video track to this page
+    // via a simple WebSocket bridge or local WebRTC connection.
+    // TODO Phase 9: implement local display bridge.
+    console.log('Robot display ready — waiting for pilot video');
+  </script>
+</body>
+</html>
