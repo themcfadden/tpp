@@ -2,6 +2,7 @@ package maestro
 
 import (
 	"fmt"
+	"log"
 	"math"
 
 	"go.bug.st/serial"
@@ -45,6 +46,7 @@ func (m *Maestro) SetTarget(channel uint8, pulseUS float64) error {
 	if err != nil {
 		return fmt.Errorf("maestro: set target ch%d: %w", channel, err)
 	}
+	log.Printf("maestro: ch%d → %.0f µs (target=%d)", channel, pulseUS, target)
 	return nil
 }
 

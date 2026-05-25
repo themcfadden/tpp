@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/mattmc/tppv4/robot/config"
@@ -92,6 +93,12 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	}
 	defer func() {
 		_ = peerConn.Close()
+		// Clear relay tracks so the display doesn't get a stale offer after
+		// the pilot disconnects (forwardRTP goroutines will have stopped).
+		m.mu.Lock()
+		m.videoRelay = nil
+		m.audioRelay = nil
+		m.mu.Unlock()
 		log.Printf("webrtc: peer connection closed")
 	}()
 
@@ -171,6 +178,15 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 			m.dispatcher.HandleLaserChannel(dc)
 		case "status":
 			m.dispatcher.SetStatusChannel(dc)
+		case "logs":
+			dc.OnOpen(func() {
+				log.Printf("webrtc: logs channel open — mirroring log output to pilot")
+				log.SetOutput(io.MultiWriter(os.Stderr, &dcWriter{dc: dc}))
+			})
+			dc.OnClose(func() {
+				log.SetOutput(os.Stderr)
+				log.Printf("webrtc: logs channel closed — log output restored to stderr")
+			})
 		}
 	})
 
@@ -264,6 +280,8 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	audioRelay := m.audioRelay
 	m.mu.RUnlock()
 
+	log.Printf("display: relay state — video=%v audio=%v", videoRelay != nil, audioRelay != nil)
+
 	if videoRelay == nil {
 		log.Printf("display: no pilot connected yet, telling display to retry")
 		_ = send(sigMsg{Type: "no-pilot"})
@@ -276,7 +294,23 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		},
 	}
 
-	peerConn, err := webrtc.NewPeerConnection(iceConfig)
+	// Register default codecs on a fresh MediaEngine so the offer contains
+	// the full codec list (VP8, VP9, H264, Opus, etc.) that Chromium expects.
+	// Without this, webrtc.NewAPI produces an empty offer and the browser rejects it.
+	me := &webrtc.MediaEngine{}
+	if err := me.RegisterDefaultCodecs(); err != nil {
+		return fmt.Errorf("display: register codecs: %w", err)
+	}
+
+	// Include loopback ICE candidates so the display (Chromium kiosk on the
+	// same Pi) can always connect via 127.0.0.1, regardless of firewall rules
+	// on the LAN interface.
+	se := webrtc.SettingEngine{}
+	se.SetIPFilter(func(ip net.IP) bool { return true })
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(se))
+
+	peerConn, err := api.NewPeerConnection(iceConfig)
 	if err != nil {
 		return fmt.Errorf("display: new peer connection: %w", err)
 	}
@@ -285,6 +319,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		log.Printf("display: peer connection closed")
 	}()
 
+	log.Printf("display: adding relay tracks to peer connection")
 	if _, err := peerConn.AddTrack(videoRelay); err != nil {
 		return fmt.Errorf("display: add video track: %w", err)
 	}
@@ -294,22 +329,40 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		}
 	}
 
+	peerConn.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			log.Printf("display: ICE gathering complete")
+			return
+		}
+		log.Printf("display: ICE candidate → %s", c.String())
+		ci := c.ToJSON()
+		mid := ""
+		if ci.SDPMid != nil {
+			mid = *ci.SDPMid
+		}
+		idx := 0
+		if ci.SDPMLineIndex != nil {
+			idx = int(*ci.SDPMLineIndex)
+		}
+		if err := send(sigMsg{
+			Type:          "ice-candidate",
+			Candidate:     ci.Candidate,
+			SDPMid:        mid,
+			SDPMLineIndex: idx,
+		}); err != nil {
+			log.Printf("display: send ICE candidate: %v", err)
+		}
+	})
+
+	peerConn.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		log.Printf("display: ICE connection state → %s", state)
+	})
+
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("display: connection state → %s", state)
 	})
 
-	// Gather all ICE candidates before sending the offer (simpler than trickle on LAN).
-	gatherDone := make(chan struct{})
-	peerConn.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
-		if state == webrtc.ICEGatheringStateComplete {
-			select {
-			case <-gatherDone:
-			default:
-				close(gatherDone)
-			}
-		}
-	})
-
+	log.Printf("display: creating offer")
 	offer, err := peerConn.CreateOffer(nil)
 	if err != nil {
 		return fmt.Errorf("display: create offer: %w", err)
@@ -318,17 +371,13 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		return fmt.Errorf("display: set local description: %w", err)
 	}
 
-	// Wait for ICE gathering to finish (max 2s on LAN).
-	select {
-	case <-gatherDone:
-	case <-time.After(2 * time.Second):
-	}
-
-	if err := send(sigMsg{Type: "offer", SDP: peerConn.LocalDescription().SDP}); err != nil {
+	log.Printf("display: sending offer to browser (SDP length: %d)", len(offer.SDP))
+	if err := send(sigMsg{Type: "offer", SDP: offer.SDP}); err != nil {
 		return fmt.Errorf("display: send offer: %w", err)
 	}
 
 	// Receive answer and any ICE candidates from the display browser.
+	// ICE is trickled: candidates may arrive before or after the answer.
 	var (
 		pendingCandidates []webrtc.ICECandidateInit
 		remoteDescSet     bool
@@ -350,6 +399,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			log.Printf("display: bad signaling message: %v", err)
 			continue
 		}
+		log.Printf("display: ← %s", msg.Type)
 		switch msg.Type {
 		case "answer":
 			if err := peerConn.SetRemoteDescription(webrtc.SessionDescription{
@@ -385,6 +435,17 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			return nil
 		}
 	}
+}
+
+// dcWriter is an io.Writer that sends each log line as text over a WebRTC data channel.
+type dcWriter struct {
+	dc *webrtc.DataChannel
+}
+
+func (w *dcWriter) Write(p []byte) (int, error) {
+	// SendText is non-blocking; ignore errors so a closed channel doesn't break logging.
+	_ = w.dc.SendText(string(p))
+	return len(p), nil
 }
 
 // forwardRTP copies RTP packets from a remote track to a local relay track

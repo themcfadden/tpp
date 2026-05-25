@@ -48,68 +48,101 @@
       let pc = null;
 
       ws.onmessage = async (event) => {
-        const msg = JSON.parse(event.data);
+        try {
+          const msg = JSON.parse(event.data);
 
-        if (msg.type === 'no-pilot') {
-          // Server has no pilot yet — ws.onclose will trigger a retry.
-          status.textContent = 'Waiting for pilot…';
-          ws.close();
+          if (msg.type === 'no-pilot') {
+            // Server has no pilot yet — ws.onclose will trigger a retry.
+            status.textContent = 'Waiting for pilot…';
+            ws.close();
 
-        } else if (msg.type === 'offer') {
-          // Server is the offerer — create peer connection and answer.
-          pc = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-          });
-
-          pc.ontrack = (e) => {
-            if (e.track.kind === 'video') {
-              video.srcObject = new MediaStream([e.track]);
-              video.play().catch(() => {});
-              status.textContent = 'Connected';
-            } else if (e.track.kind === 'audio') {
-              const audio = new Audio();
-              audio.srcObject = new MediaStream([e.track]);
-              audio.play().catch(() => {});
-            }
-          };
-
-          pc.onicecandidate = (e) => {
-            if (!e.candidate) return;
-            ws.send(JSON.stringify({
-              type:          'ice-candidate',
-              candidate:     e.candidate.candidate,
-              sdpMid:        e.candidate.sdpMid,
-              sdpMLineIndex: e.candidate.sdpMLineIndex,
-            }));
-          };
-
-          pc.onconnectionstatechange = () => {
-            console.log('display state:', pc.connectionState);
-            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-              status.textContent = 'Disconnected — reconnecting…';
-              ws.close();
-            }
-          };
-
-          await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
-
-        } else if (msg.type === 'ice-candidate' && msg.candidate) {
-          if (pc) {
-            await pc.addIceCandidate({
-              candidate:     msg.candidate,
-              sdpMid:        msg.sdpMid,
-              sdpMLineIndex: msg.sdpMLineIndex,
+          } else if (msg.type === 'offer') {
+            // Server is the offerer — create peer connection and answer.
+            pc = new RTCPeerConnection({
+              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
             });
+
+            // ICE timeout: if ICE is still not connected after 10 s, retry.
+            const iceTimeout = setTimeout(() => {
+              const s = pc && pc.iceConnectionState;
+              if (s && s !== 'connected' && s !== 'completed') {
+                console.warn('display: ICE timeout (' + s + '), retrying');
+                ws.close();
+              }
+            }, 10000);
+
+            pc.ontrack = (e) => {
+              if (e.track.kind === 'video') {
+                video.srcObject = new MediaStream([e.track]);
+                video.play().catch(() => {});
+                status.textContent = 'Connected';
+              } else if (e.track.kind === 'audio') {
+                const audio = new Audio();
+                audio.srcObject = new MediaStream([e.track]);
+                audio.play().catch(() => {});
+              }
+            };
+
+            pc.onicecandidate = (e) => {
+              if (!e.candidate) return;
+              ws.send(JSON.stringify({
+                type:          'ice-candidate',
+                candidate:     e.candidate.candidate,
+                sdpMid:        e.candidate.sdpMid,
+                sdpMLineIndex: e.candidate.sdpMLineIndex,
+              }));
+            };
+
+            pc.onconnectionstatechange = () => {
+              console.log('display state:', pc.connectionState);
+              if (pc.connectionState === 'connected') {
+                // ICE + DTLS handshake complete; video should appear soon.
+                if (status.textContent === 'Connecting…') {
+                  status.textContent = 'Connected';
+                }
+                clearTimeout(iceTimeout);
+              }
+              if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                clearTimeout(iceTimeout);
+                status.textContent = 'Disconnected — reconnecting…';
+                ws.close();
+              }
+            };
+
+            pc.oniceconnectionstatechange = () => {
+              console.log('display ICE:', pc.iceConnectionState);
+              if (pc.iceConnectionState === 'failed') {
+                console.warn('display: ICE failed, retrying');
+                clearTimeout(iceTimeout);
+                ws.close();
+              }
+            };
+
+            await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+
+          } else if (msg.type === 'ice-candidate' && msg.candidate) {
+            if (pc) {
+              await pc.addIceCandidate({
+                candidate:     msg.candidate,
+                sdpMid:        msg.sdpMid,
+                sdpMLineIndex: msg.sdpMLineIndex,
+              });
+            }
           }
+        } catch (err) {
+          // Any signaling error (bad SDP, codec mismatch, etc.) → close and retry.
+          console.error('display: signaling error:', err);
+          status.textContent = 'Error — retrying…';
+          ws.close();
         }
       };
 
       ws.onclose = () => {
         if (pc) { pc.close(); pc = null; }
-        setTimeout(start, 3000);
+        setTimeout(start, 1000);
       };
     }
 

@@ -57,6 +57,9 @@ func (d *Dispatcher) SetStatusChannel(dc *webrtc.DataChannel) {
 
 // HandleDriveChannel wires an unreliable data channel to drive commands.
 func (d *Dispatcher) HandleDriveChannel(dc *webrtc.DataChannel) {
+	dc.OnOpen(func() {
+		log.Printf("control: drive channel open")
+	})
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		var c cmd
 		if err := json.Unmarshal(msg.Data, &c); err != nil {
@@ -67,10 +70,12 @@ func (d *Dispatcher) HandleDriveChannel(dc *webrtc.DataChannel) {
 		switch c.Type {
 		case "drive":
 			left, right := motor.DifferentialDrive(c.X, c.Y)
+			log.Printf("control: drive x=%.2f y=%.2f → L=%.2f R=%.2f", c.X, c.Y, left, right)
 			if err := d.motors.SetSpeed(ctx, left, right); err != nil {
 				log.Printf("control: motor SetSpeed: %v", err)
 			}
 		case "stop":
+			log.Printf("control: stop")
 			if err := d.motors.Stop(ctx); err != nil {
 				log.Printf("control: motor Stop: %v", err)
 			}
@@ -80,6 +85,9 @@ func (d *Dispatcher) HandleDriveChannel(dc *webrtc.DataChannel) {
 
 // HandleServoChannel wires an unreliable data channel to servo commands.
 func (d *Dispatcher) HandleServoChannel(dc *webrtc.DataChannel) {
+	dc.OnOpen(func() {
+		log.Printf("control: servo channel open")
+	})
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		var c cmd
 		if err := json.Unmarshal(msg.Data, &c); err != nil {
@@ -99,6 +107,7 @@ func (d *Dispatcher) HandleServoChannel(dc *webrtc.DataChannel) {
 		default:
 			return
 		}
+		log.Printf("control: servo pan=%.1f° tilt=%.1f°", d.panDeg, d.tiltDeg)
 		if err := d.maestro.SetServo(
 			uint8(d.cfg.MaestroPanChannel), d.panDeg,
 			d.cfg.PanMinUS, d.cfg.PanMaxUS,

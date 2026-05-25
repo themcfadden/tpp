@@ -6,6 +6,30 @@ BINARY      := tppv4-robot
 ARM_BINARY   := tppv4-robot-arm64
 
 
+.PHONY: help
+help:
+	@echo "TPPV4 — available targets"
+	@echo ""
+	@echo "  Local development:"
+	@echo "    build          Build the robot binary ($(BINARY)) for the local machine"
+	@echo "    run            Build and run locally (uses NoOp motor/servo drivers)"
+	@echo "    test           Run all Go tests"
+	@echo "    lint           Run go vet on all packages"
+	@echo "    clean          Remove compiled binaries"
+	@echo ""
+	@echo "  Raspberry Pi deployment (ROBOT_HOST defaults to mattmc@tpp.local):"
+	@echo "    rpi-setup      Install system deps and Go on the RPi (first-time only)"
+	@echo "    deploy         Sync source to RPi, build there, and restart the service"
+	@echo "    deploy-run     deploy + attach an interactive SSH session to the process"
+	@echo ""
+	@echo "  Linux test machine (LINUX_HOST defaults to mattmc@fuego):"
+	@echo "    deploy-src     Sync source to a Linux host, build there, and print run instructions"
+	@echo ""
+	@echo "  Cross-compilation:"
+	@echo "    build-arm      Cross-compile for ARM64 (no CGo — not usable on real hardware)"
+	@echo ""
+	@echo "Override defaults:  make deploy ROBOT_HOST=pi@192.168.1.100"
+
 # ── Local development ──────────────────────────────────────────────────────────
 
 .PHONY: build

@@ -15,6 +15,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/mattmc/tppv4/robot/config"
 	"github.com/pion/mediadevices"
@@ -32,6 +34,8 @@ import (
 type Controller struct {
 	cfg           config.Config
 	codecSelector *mediadevices.CodecSelector
+	mu            sync.Mutex
+	stream        mediadevices.MediaStream
 }
 
 // New initialises media codec parameters. Call once at startup.
@@ -57,11 +61,24 @@ func New(cfg config.Config) (*Controller, error) {
 }
 
 // AddTracksTo opens a fresh camera+mic stream and adds the tracks to the given peer
-// connection. A new stream is opened on every call because mediadevices tracks become
-// unusable once their previous peer connection closes.
+// connection. Any previously open stream is closed first so the driver is released
+// before re-opening (mediadevices allows only one open at a time).
 func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
 	if c.codecSelector == nil {
 		return nil // stub/dev mode
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Close the previous stream so the driver is fully released before we reopen.
+	if c.stream != nil {
+		for _, t := range c.stream.GetTracks() {
+			t.Close()
+		}
+		c.stream = nil
+		// Brief pause so the driver state machine can transition back to Closed.
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	stream, err := mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
@@ -77,6 +94,7 @@ func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
 	if err != nil {
 		return fmt.Errorf("media: GetUserMedia: %w", err)
 	}
+	c.stream = stream
 
 	for _, track := range stream.GetTracks() {
 		track.OnEnded(func(err error) {
