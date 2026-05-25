@@ -43,26 +43,56 @@ deploy-src:
 	@echo "  ssh $(LINUX_HOST)"
 	@echo "  cd $(LINUX_DIR) && MAESTRO_PORT=none ./tppv4-robot"
 
-# ── Cross-compile for Raspberry Pi (ARM64) ────────────────────────────────────
+# ── Cross-compile for Raspberry Pi (ARM64, no CGo) ────────────────────────────
+# NOTE: CGo dependencies (libvpx, opus, malgo) require building on the RPi itself.
+# Use the deploy / rpi-setup targets below for real deployments.
 
 .PHONY: build-arm
 build-arm:
 	cd $(ROBOT_DIR) && GOOS=linux GOARCH=arm64 go build -o ../$(ARM_BINARY) ./cmd/robot
 
-# ── Deploy to Raspberry Pi ────────────────────────────────────────────────────
-# Set ROBOT_HOST to your RPi's address, e.g.:  make deploy ROBOT_HOST=pi@192.168.1.100
+# ── Raspberry Pi ──────────────────────────────────────────────────────────────
+# tpp.local / 192.168.1.228 — ARM64 Raspberry Pi 4B
+# First-time setup:  make rpi-setup
+# Deploy + run:      make deploy
+#                    make deploy-run   (deploys then attaches to the process)
 
-ROBOT_HOST ?= pi@raspberrypi.local
-REMOTE_DIR := /home/pi/tppv4
+ROBOT_HOST ?= mattmc@tpp.local
+REMOTE_DIR := ~/tppv4
+GO_VER     := 1.26.3
+
+.PHONY: rpi-setup
+rpi-setup:
+	@echo "==> Installing system dependencies on $(ROBOT_HOST) ..."
+	ssh $(ROBOT_HOST) "sudo apt-get update && sudo apt-get install -y libvpx-dev libasound2-dev"
+	@echo "==> Installing Go $(GO_VER) on $(ROBOT_HOST) ..."
+	ssh $(ROBOT_HOST) " \
+	  curl -fsSL https://go.dev/dl/go$(GO_VER).linux-arm64.tar.gz | sudo tar -C /usr/local -xz && \
+	  grep -q '/usr/local/go/bin' ~/.profile || echo 'export PATH=\$$PATH:/usr/local/go/bin' >> ~/.profile && \
+	  grep -q '/usr/local/go/bin' ~/.bashrc  || echo 'export PATH=\$$PATH:/usr/local/go/bin' >> ~/.bashrc"
+	@echo ""
+	@echo "==> Setup complete on $(ROBOT_HOST)."
+	@echo "    Run 'make deploy' to sync source and build."
 
 .PHONY: deploy
-deploy: build-arm
-	ssh $(ROBOT_HOST) "mkdir -p $(REMOTE_DIR)/pilot"
-	scp $(ARM_BINARY)             $(ROBOT_HOST):$(REMOTE_DIR)/$(BINARY)
-	scp -r $(PILOT_DIR)/          $(ROBOT_HOST):$(REMOTE_DIR)/pilot/
-	scp -r deploy/                $(ROBOT_HOST):$(REMOTE_DIR)/deploy/ 2>/dev/null || true
-	ssh $(ROBOT_HOST) "sudo systemctl restart tppv4-robot || true"
-	@echo "Deployed to $(ROBOT_HOST)"
+deploy:
+	@echo "==> Syncing source to $(ROBOT_HOST):$(REMOTE_DIR) ..."
+	ssh $(ROBOT_HOST) "mkdir -p $(REMOTE_DIR)"
+	rsync -av --exclude='.git' --exclude='vendor' --exclude='*.test' \
+	  $(ROBOT_DIR)/  $(ROBOT_HOST):$(REMOTE_DIR)/$(ROBOT_DIR)/
+	rsync -av $(PILOT_DIR)/  $(ROBOT_HOST):$(REMOTE_DIR)/$(PILOT_DIR)/
+	@echo "==> Building on RPi ..."
+	ssh $(ROBOT_HOST) "cd $(REMOTE_DIR)/$(ROBOT_DIR) && \
+	  PATH=\$$PATH:/usr/local/go/bin go build -o ../$(BINARY) ./cmd/robot && echo 'Build OK'"
+	ssh $(ROBOT_HOST) "systemctl --user restart tppv4-robot && echo 'Service restarted'"
+	@echo ""
+	@echo "Deployed to $(ROBOT_HOST). To run:"
+	@echo "  ssh $(ROBOT_HOST) 'cd $(REMOTE_DIR) && ./$(BINARY)'"
+	@echo "  Pilot UI: http://tpp.local:8080"
+
+.PHONY: deploy-run
+deploy-run: deploy
+	ssh -t $(ROBOT_HOST) "cd $(REMOTE_DIR) && ./$(BINARY)"
 
 .PHONY: clean
 clean:

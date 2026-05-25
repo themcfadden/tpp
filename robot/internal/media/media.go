@@ -31,11 +31,11 @@ import (
 // Controller captures local camera + mic and can add them to a peer connection.
 type Controller struct {
 	cfg           config.Config
-	stream        mediadevices.MediaStream
 	codecSelector *mediadevices.CodecSelector
 }
 
-// New initialises media capture. Call once at startup.
+// New initialises media codec parameters. Call once at startup.
+// Camera and mic are opened per-connection in AddTracksTo.
 func New(cfg config.Config) (*Controller, error) {
 	opusParams, err := opus.NewParams()
 	if err != nil {
@@ -52,31 +52,33 @@ func New(cfg config.Config) (*Controller, error) {
 		mediadevices.WithAudioEncoders(&opusParams),
 	)
 
-	stream, err := mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
-		Video: func(c *mediadevices.MediaTrackConstraints) {
-			c.DeviceID = prop.String(cfg.CameraDevice)
-		},
-		Audio: func(c *mediadevices.MediaTrackConstraints) {
-			c.SampleRate   = prop.Int(48000)
-			c.ChannelCount = prop.Int(1)
-		},
-		Codec: codecSelector,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("media: GetUserMedia: %w", err)
-	}
-
-	log.Printf("media: camera and microphone opened (camera: %s)", cfg.CameraDevice)
-	return &Controller{cfg: cfg, stream: stream, codecSelector: codecSelector}, nil
+	log.Printf("media: codecs initialised (camera: %s)", cfg.CameraDevice)
+	return &Controller{cfg: cfg, codecSelector: codecSelector}, nil
 }
 
-// AddTracksTo adds the robot's camera and mic tracks to the given peer connection.
-// No-ops if the stream is nil (stub/dev mode).
+// AddTracksTo opens a fresh camera+mic stream and adds the tracks to the given peer
+// connection. A new stream is opened on every call because mediadevices tracks become
+// unusable once their previous peer connection closes.
 func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
-	if c.stream == nil {
-		return nil
+	if c.codecSelector == nil {
+		return nil // stub/dev mode
 	}
-	for _, track := range c.stream.GetTracks() {
+
+	stream, err := mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
+		Video: func(mc *mediadevices.MediaTrackConstraints) {
+			mc.DeviceID = prop.String(c.cfg.CameraDevice)
+		},
+		Audio: func(mc *mediadevices.MediaTrackConstraints) {
+			mc.SampleRate   = prop.Int(48000)
+			mc.ChannelCount = prop.Int(1)
+		},
+		Codec: c.codecSelector,
+	})
+	if err != nil {
+		return fmt.Errorf("media: GetUserMedia: %w", err)
+	}
+
+	for _, track := range stream.GetTracks() {
 		track.OnEnded(func(err error) {
 			if err != nil {
 				log.Printf("media: track ended with error: %v", err)

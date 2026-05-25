@@ -29,6 +29,10 @@ export function sendLaser(on) {
 }
 
 function sendOn(dc, payload) {
-  if (!dc || dc.readyState !== 'open') return;
+  if (!dc || dc.readyState !== 'open') {
+    console.warn('[protocol] channel not open, dropping:', payload);
+    return;
+  }
+  console.log('[protocol] →', JSON.stringify(payload));
   dc.send(JSON.stringify(payload));
 }

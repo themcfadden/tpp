@@ -14,22 +14,110 @@
       height: 100%;
       object-fit: cover;
     }
+    #status {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 4px 16px;
+      border-radius: 14px;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
-  <!--
-    This page runs in Chromium kiosk mode on the robot's HDMI screen.
-    It displays the pilot's incoming video fullscreen.
-    The robot's Go process serves the pilot's audio track to the ALSA speaker
-    directly (via gopxl/beep) — audio is NOT routed through this page to
-    avoid double-playback.
-  -->
   <video id="pilotVideo" autoplay playsinline muted></video>
+  <div id="status">Waiting for pilot…</div>
   <script>
-    // The robot's Go process will relay the pilot's video track to this page
-    // via a simple WebSocket bridge or local WebRTC connection.
-    // TODO Phase 9: implement local display bridge.
-    console.log('Robot display ready — waiting for pilot video');
+    const video  = document.getElementById('pilotVideo');
+    const status = document.getElementById('status');
+
+    async function start() {
+      status.textContent = 'Connecting…';
+
+      const ws = new WebSocket(`ws://${location.host}/display-ws`);
+      await new Promise((resolve, reject) => {
+        ws.onopen  = resolve;
+        ws.onerror = reject;
+      });
+
+      let pc = null;
+
+      ws.onmessage = async (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'no-pilot') {
+          // Server has no pilot yet — ws.onclose will trigger a retry.
+          status.textContent = 'Waiting for pilot…';
+          ws.close();
+
+        } else if (msg.type === 'offer') {
+          // Server is the offerer — create peer connection and answer.
+          pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          });
+
+          pc.ontrack = (e) => {
+            if (e.track.kind === 'video') {
+              video.srcObject = new MediaStream([e.track]);
+              video.play().catch(() => {});
+              status.textContent = 'Connected';
+            } else if (e.track.kind === 'audio') {
+              const audio = new Audio();
+              audio.srcObject = new MediaStream([e.track]);
+              audio.play().catch(() => {});
+            }
+          };
+
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) return;
+            ws.send(JSON.stringify({
+              type:          'ice-candidate',
+              candidate:     e.candidate.candidate,
+              sdpMid:        e.candidate.sdpMid,
+              sdpMLineIndex: e.candidate.sdpMLineIndex,
+            }));
+          };
+
+          pc.onconnectionstatechange = () => {
+            console.log('display state:', pc.connectionState);
+            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+              status.textContent = 'Disconnected — reconnecting…';
+              ws.close();
+            }
+          };
+
+          await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+
+        } else if (msg.type === 'ice-candidate' && msg.candidate) {
+          if (pc) {
+            await pc.addIceCandidate({
+              candidate:     msg.candidate,
+              sdpMid:        msg.sdpMid,
+              sdpMLineIndex: msg.sdpMLineIndex,
+            });
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        if (pc) { pc.close(); pc = null; }
+        setTimeout(start, 3000);
+      };
+    }
+
+    start().catch(err => {
+      console.error('Display start failed:', err);
+      status.textContent = 'Error — retrying…';
+      setTimeout(start, 3000);
+    });
   </script>
 </body>
 </html>

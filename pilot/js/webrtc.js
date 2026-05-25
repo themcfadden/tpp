@@ -33,9 +33,12 @@ async function start() {
   channels.laser  = pc.createDataChannel('laser',  { ordered: true  });
   channels.status = pc.createDataChannel('status', { ordered: true  });
 
-  channels.drive.onopen  = () => setStatus('connected');
-  channels.drive.onclose = () => setStatus('disconnected');
-  channels.status.onmessage = e => handleRobotStatus(e.data);
+  channels.drive.onopen  = () => { console.log('[webrtc] drive channel open'); setStatus('connected'); };
+  channels.drive.onclose = () => { console.log('[webrtc] drive channel closed'); setStatus('disconnected'); };
+  channels.servo.onopen  = () => console.log('[webrtc] servo channel open');
+  channels.laser.onopen  = () => console.log('[webrtc] laser channel open');
+  channels.status.onopen = () => console.log('[webrtc] status channel open');
+  channels.status.onmessage = e => { console.log('[webrtc] ← status:', e.data); handleRobotStatus(e.data); };
 
   // ── Receive robot video + audio ───────────────────────────────────────────
   const robotVideo = document.getElementById('robotVideo');

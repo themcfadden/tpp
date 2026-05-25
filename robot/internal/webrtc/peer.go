@@ -3,10 +3,13 @@ package webrtcpeer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/mattmc/tppv4/robot/config"
@@ -33,7 +36,11 @@ type Manager struct {
 	cfg        config.Config
 	dispatcher *control.Dispatcher
 	mediaCtrl  *media.Controller
-	mu         sync.Mutex
+	mu         sync.RWMutex
+
+	// Relay tracks: pilot's incoming video/audio forwarded to the display page.
+	videoRelay *webrtc.TrackLocalStaticRTP
+	audioRelay *webrtc.TrackLocalStaticRTP
 }
 
 // New creates a Manager.
@@ -53,6 +60,22 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := m.runSession(conn); err != nil {
 		log.Printf("webrtc: session ended: %v", err)
+	}
+}
+
+// ServeDisplay handles the WebSocket upgrade for the robot's local display browser.
+// The display page (display.html) connects here to receive the pilot's video/audio.
+func (m *Manager) ServeDisplay(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("display: ws upgrade: %v", err)
+		return
+	}
+	defer conn.Close()
+	log.Printf("display: browser connected from %s", r.RemoteAddr)
+
+	if err := m.runDisplaySession(conn); err != nil {
+		log.Printf("display: session ended: %v", err)
 	}
 }
 
@@ -101,12 +124,31 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		})
 	})
 
-	// Receive pilot's video/audio (displayed on robot screen via Chromium kiosk).
+	// Receive pilot's video/audio. Create relay tracks so they can be forwarded
+	// to the robot's local display browser via ServeDisplay.
 	peerConn.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		log.Printf("webrtc: received %s track from pilot", track.Kind())
-		if track.Kind() == webrtc.RTPCodecTypeAudio {
-			go m.mediaCtrl.PlayPilotAudio(context.Background(), track)
+
+		relay, err := webrtc.NewTrackLocalStaticRTP(
+			track.Codec().RTPCodecCapability,
+			track.Kind().String(),
+			"pilot-relay",
+		)
+		if err != nil {
+			log.Printf("webrtc: create %s relay: %v", track.Kind(), err)
+			return
 		}
+
+		m.mu.Lock()
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			m.videoRelay = relay
+		} else {
+			m.audioRelay = relay
+		}
+		m.mu.Unlock()
+
+		// Forward RTP packets from pilot → relay track (read by display peer connection).
+		go forwardRTP(track, relay)
 	})
 
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
@@ -138,6 +180,19 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	}
 
 	// Signaling loop: wait for pilot's offer, respond with answer.
+	// ICE candidates may arrive before the offer (trickle ICE race), so we
+	// queue them and drain the queue once the remote description is set.
+	var (
+		pendingCandidates []webrtc.ICECandidateInit
+		remoteDescSet     bool
+	)
+
+	addCandidate := func(init webrtc.ICECandidateInit) {
+		if err := peerConn.AddICECandidate(init); err != nil {
+			log.Printf("webrtc: add ICE candidate: %v", err)
+		}
+	}
+
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -156,6 +211,12 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 			}); err != nil {
 				return fmt.Errorf("set remote description: %w", err)
 			}
+			remoteDescSet = true
+			for _, c := range pendingCandidates {
+				addCandidate(c)
+			}
+			pendingCandidates = nil
+
 			answer, err := peerConn.CreateAnswer(nil)
 			if err != nil {
 				return fmt.Errorf("create answer: %w", err)
@@ -171,12 +232,15 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 			}
 			sdpMid := msg.SDPMid
 			sdpMLineIndex := uint16(msg.SDPMLineIndex)
-			if err := peerConn.AddICECandidate(webrtc.ICECandidateInit{
+			init := webrtc.ICECandidateInit{
 				Candidate:     msg.Candidate,
 				SDPMid:        &sdpMid,
 				SDPMLineIndex: &sdpMLineIndex,
-			}); err != nil {
-				log.Printf("webrtc: add ICE candidate: %v", err)
+			}
+			if remoteDescSet {
+				addCandidate(init)
+			} else {
+				pendingCandidates = append(pendingCandidates, init)
 			}
 
 		case "close":
@@ -184,3 +248,165 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		}
 	}
 }
+
+// runDisplaySession handles a WebRTC connection from the robot's local display browser.
+// The SERVER acts as offerer: it adds relay tracks and sends the offer to the display.
+// If no pilot is connected yet, it sends "no-pilot" and closes so the display retries.
+func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
+	send := func(msg sigMsg) error {
+		data, _ := json.Marshal(msg)
+		return conn.WriteMessage(websocket.TextMessage, data)
+	}
+
+	// Check whether relay tracks are available (requires a pilot to be connected).
+	m.mu.RLock()
+	videoRelay := m.videoRelay
+	audioRelay := m.audioRelay
+	m.mu.RUnlock()
+
+	if videoRelay == nil {
+		log.Printf("display: no pilot connected yet, telling display to retry")
+		_ = send(sigMsg{Type: "no-pilot"})
+		return nil
+	}
+
+	iceConfig := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+	}
+
+	peerConn, err := webrtc.NewPeerConnection(iceConfig)
+	if err != nil {
+		return fmt.Errorf("display: new peer connection: %w", err)
+	}
+	defer func() {
+		_ = peerConn.Close()
+		log.Printf("display: peer connection closed")
+	}()
+
+	if _, err := peerConn.AddTrack(videoRelay); err != nil {
+		return fmt.Errorf("display: add video track: %w", err)
+	}
+	if audioRelay != nil {
+		if _, err := peerConn.AddTrack(audioRelay); err != nil {
+			return fmt.Errorf("display: add audio track: %w", err)
+		}
+	}
+
+	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		log.Printf("display: connection state → %s", state)
+	})
+
+	// Gather all ICE candidates before sending the offer (simpler than trickle on LAN).
+	gatherDone := make(chan struct{})
+	peerConn.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
+		if state == webrtc.ICEGatheringStateComplete {
+			select {
+			case <-gatherDone:
+			default:
+				close(gatherDone)
+			}
+		}
+	})
+
+	offer, err := peerConn.CreateOffer(nil)
+	if err != nil {
+		return fmt.Errorf("display: create offer: %w", err)
+	}
+	if err := peerConn.SetLocalDescription(offer); err != nil {
+		return fmt.Errorf("display: set local description: %w", err)
+	}
+
+	// Wait for ICE gathering to finish (max 2s on LAN).
+	select {
+	case <-gatherDone:
+	case <-time.After(2 * time.Second):
+	}
+
+	if err := send(sigMsg{Type: "offer", SDP: peerConn.LocalDescription().SDP}); err != nil {
+		return fmt.Errorf("display: send offer: %w", err)
+	}
+
+	// Receive answer and any ICE candidates from the display browser.
+	var (
+		pendingCandidates []webrtc.ICECandidateInit
+		remoteDescSet     bool
+	)
+
+	addCandidate := func(init webrtc.ICECandidateInit) {
+		if err := peerConn.AddICECandidate(init); err != nil {
+			log.Printf("display: add ICE candidate: %v", err)
+		}
+	}
+
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("display: read signaling: %w", err)
+		}
+		var msg sigMsg
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			log.Printf("display: bad signaling message: %v", err)
+			continue
+		}
+		switch msg.Type {
+		case "answer":
+			if err := peerConn.SetRemoteDescription(webrtc.SessionDescription{
+				Type: webrtc.SDPTypeAnswer,
+				SDP:  msg.SDP,
+			}); err != nil {
+				return fmt.Errorf("display: set remote description: %w", err)
+			}
+			remoteDescSet = true
+			for _, c := range pendingCandidates {
+				addCandidate(c)
+			}
+			pendingCandidates = nil
+
+		case "ice-candidate":
+			if msg.Candidate == "" {
+				continue
+			}
+			sdpMid := msg.SDPMid
+			sdpMLineIndex := uint16(msg.SDPMLineIndex)
+			init := webrtc.ICECandidateInit{
+				Candidate:     msg.Candidate,
+				SDPMid:        &sdpMid,
+				SDPMLineIndex: &sdpMLineIndex,
+			}
+			if remoteDescSet {
+				addCandidate(init)
+			} else {
+				pendingCandidates = append(pendingCandidates, init)
+			}
+
+		case "close":
+			return nil
+		}
+	}
+}
+
+// forwardRTP copies RTP packets from a remote track to a local relay track
+// until the source closes. Runs in its own goroutine.
+func forwardRTP(src *webrtc.TrackRemote, dst *webrtc.TrackLocalStaticRTP) {
+	for {
+		pkt, _, err := src.ReadRTP()
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				log.Printf("webrtc: relay %s read: %v", src.Kind(), err)
+			}
+			return
+		}
+		if err := dst.WriteRTP(pkt); err != nil {
+			// Ignore write errors — display may not be connected yet.
+			_ = err
+		}
+	}
+}
+
+// Ensure Manager implements http.Handler for /ws.
+var _ http.Handler = (*Manager)(nil)
+
+// Keep context import used.
+var _ = context.Background

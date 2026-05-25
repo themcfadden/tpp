@@ -81,7 +81,10 @@ pilotDir = "pilot"
 
 mux := http.NewServeMux()
 mux.Handle("/ws", peerManager)
-mux.Handle("/display", http.FileServer(http.Dir(pilotDir)))
+mux.Handle("/display-ws", http.HandlerFunc(peerManager.ServeDisplay))
+mux.HandleFunc("/display", func(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, pilotDir+"/display.html")
+})
 mux.Handle("/", http.FileServer(http.Dir(pilotDir)))
 
 addr := fmt.Sprintf(":%d", cfg.HTTPPort)
