@@ -91,7 +91,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => heldKeys.delete(e.code));
 
-let lastKX = null, lastKY = null;
+let lastKX = 0, lastKY = 0;
 function keyboardLoop() {
   let x = 0, y = 0;
   if (heldKeys.has('KeyW') || heldKeys.has('ArrowUp'))    y += 1;

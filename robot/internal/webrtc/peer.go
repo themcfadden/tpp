@@ -16,6 +16,7 @@ import (
 	"github.com/mattmc/tppv4/robot/config"
 	"github.com/mattmc/tppv4/robot/internal/control"
 	"github.com/mattmc/tppv4/robot/internal/media"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -42,11 +43,23 @@ type Manager struct {
 	// Relay tracks: pilot's incoming video/audio forwarded to the display page.
 	videoRelay *webrtc.TrackLocalStaticRTP
 	audioRelay *webrtc.TrackLocalStaticRTP
+	videoSSRC  uint32 // SSRC of the pilot's video track; used to send PLI
+
+	// pilotPC is the pilot's peer connection, kept so the display can request
+	// keyframes (PLI) from the pilot's encoder via RTCP.
+	pilotPC   *webrtc.PeerConnection
+	pilotMu   sync.Mutex
+	pilotGone chan struct{} // closed when the current pilot disconnects
 }
 
 // New creates a Manager.
 func New(cfg config.Config, d *control.Dispatcher, mc *media.Controller) *Manager {
-	return &Manager{cfg: cfg, dispatcher: d, mediaCtrl: mc}
+	return &Manager{
+		cfg:        cfg,
+		dispatcher: d,
+		mediaCtrl:  mc,
+		pilotGone:  make(chan struct{}),
+	}
 }
 
 // ServeHTTP handles the WebSocket upgrade and runs the full signaling + peer lifecycle.
@@ -81,6 +94,12 @@ func (m *Manager) ServeDisplay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) runSession(conn *websocket.Conn) error {
+	// Broadcast to any waiting display sessions that a new pilot is present.
+	pilotGone := make(chan struct{})
+	m.pilotMu.Lock()
+	m.pilotGone = pilotGone
+	m.pilotMu.Unlock()
+
 	iceConfig := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
@@ -91,6 +110,12 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	if err != nil {
 		return fmt.Errorf("new peer connection: %w", err)
 	}
+
+	// Store pilot PC so the display can request keyframes via PLI.
+	m.pilotMu.Lock()
+	m.pilotPC = peerConn
+	m.pilotMu.Unlock()
+
 	defer func() {
 		_ = peerConn.Close()
 		// Clear relay tracks so the display doesn't get a stale offer after
@@ -98,7 +123,13 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		m.mu.Lock()
 		m.videoRelay = nil
 		m.audioRelay = nil
+		m.videoSSRC = 0
 		m.mu.Unlock()
+		m.pilotMu.Lock()
+		m.pilotPC = nil
+		m.pilotMu.Unlock()
+		// Signal all active display sessions to close and reconnect.
+		close(pilotGone)
 		log.Printf("webrtc: peer connection closed")
 	}()
 
@@ -149,6 +180,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		m.mu.Lock()
 		if track.Kind() == webrtc.RTPCodecTypeVideo {
 			m.videoRelay = relay
+			m.videoSSRC = uint32(track.SSRC())
 		} else {
 			m.audioRelay = relay
 		}
@@ -288,6 +320,12 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		return nil
 	}
 
+	// Snapshot the pilot-gone channel now that we know a pilot is connected.
+	// We'll watch it below so the display reconnects when the pilot leaves.
+	m.pilotMu.Lock()
+	pilotGone := m.pilotGone
+	m.pilotMu.Unlock()
+
 	iceConfig := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
@@ -360,6 +398,12 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("display: connection state → %s", state)
+		if state == webrtc.PeerConnectionStateConnected {
+			// Request an immediate keyframe from the pilot so the display
+			// doesn't have to wait for the next periodic one (which could be
+			// many seconds away in a mid-stream relay).
+			m.sendPLI()
+		}
 	})
 
 	log.Printf("display: creating offer")
@@ -378,6 +422,20 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 
 	// Receive answer and any ICE candidates from the display browser.
 	// ICE is trickled: candidates may arrive before or after the answer.
+
+	// When the pilot disconnects, close the WebSocket so the display browser
+	// retries and picks up the next pilot's relay tracks.
+	sessionDone := make(chan struct{})
+	defer close(sessionDone)
+	go func() {
+		select {
+		case <-pilotGone:
+			log.Printf("display: pilot gone — closing display session for reconnect")
+			conn.Close()
+		case <-sessionDone:
+		}
+	}()
+
 	var (
 		pendingCandidates []webrtc.ICECandidateInit
 		remoteDescSet     bool
@@ -446,6 +504,30 @@ func (w *dcWriter) Write(p []byte) (int, error) {
 	// SendText is non-blocking; ignore errors so a closed channel doesn't break logging.
 	_ = w.dc.SendText(string(p))
 	return len(p), nil
+}
+
+// sendPLI sends a Picture Loss Indication to the pilot, requesting an
+// immediate keyframe. Called when the display peer connection is established
+// so the display doesn't have to wait for the next periodic keyframe.
+func (m *Manager) sendPLI() {
+	m.pilotMu.Lock()
+	pc := m.pilotPC
+	m.pilotMu.Unlock()
+
+	m.mu.RLock()
+	ssrc := m.videoSSRC
+	m.mu.RUnlock()
+
+	if pc == nil || ssrc == 0 {
+		return
+	}
+	if err := pc.WriteRTCP([]rtcp.Packet{
+		&rtcp.PictureLossIndication{MediaSSRC: ssrc, SenderSSRC: ssrc},
+	}); err != nil {
+		log.Printf("display: send PLI: %v", err)
+		return
+	}
+	log.Printf("display: sent PLI to pilot — requesting keyframe")
 }
 
 // forwardRTP copies RTP packets from a remote track to a local relay track
