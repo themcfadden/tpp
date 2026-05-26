@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Give Chromium and WebRTC time to establish the display session.
+sleep 25
+
+health_json=$(curl -fsS --max-time 3 http://localhost:8080/display-health || true)
+if [[ -z "${health_json}" ]]; then
+  echo "kiosk-postcheck: display-health unavailable; restarting kiosk"
+  systemctl --user restart tppv4-kiosk.service
+  exit 0
+fi
+
+read -r browser_connected relay_video <<<"$(python3 - <<'PY' "${health_json}"
+import json
+import sys
+
+try:
+    health = json.loads(sys.argv[1])
+    browser_connected = str(bool(health.get("browserConnected", False))).lower()
+    relay_video = str(bool(health.get("relayVideo", False))).lower()
+    print(browser_connected, relay_video)
+except Exception:
+    print("false false")
+PY
+)"
+
+if [[ "${relay_video}" == "true" && "${browser_connected}" != "true" ]]; then
+  echo "kiosk-postcheck: relay present but display disconnected; restarting kiosk"
+  systemctl --user restart tppv4-kiosk.service
+else
+  echo "kiosk-postcheck: display health OK (browserConnected=${browser_connected}, relayVideo=${relay_video})"
+fi

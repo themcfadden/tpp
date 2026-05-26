@@ -1,0 +1,17 @@
+[Unit]
+Description=TPPV4 Chromium Kiosk Display
+After=graphical-session.target tppv4-robot.service
+Wants=tppv4-robot.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart=%h/.local/bin/tppv4-kiosk
+ExecStartPost=%h/.local/bin/tppv4-kiosk-postcheck
+Restart=always
+RestartSec=2
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+[Install]
+WantedBy=default.target

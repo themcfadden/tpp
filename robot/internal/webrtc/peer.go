@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/mattmc/tppv4/robot/config"
@@ -27,6 +29,24 @@ type sigMsg struct {
 	Candidate     string `json:"candidate,omitempty"`
 	SDPMid        string `json:"sdpMid,omitempty"`
 	SDPMLineIndex int    `json:"sdpMLineIndex,omitempty"`
+	Message       string `json:"message,omitempty"` // used by display "log" messages
+}
+
+// DisplayHealth captures the robot display page's latest known session state.
+type DisplayHealth struct {
+	BrowserConnected      bool      `json:"browserConnected"`
+	SessionActive         bool      `json:"sessionActive"`
+	RelayVideo            bool      `json:"relayVideo"`
+	RelayAudio            bool      `json:"relayAudio"`
+	LastBrowserConnect    time.Time `json:"lastBrowserConnect,omitempty"`
+	LastBrowserDisconnect time.Time `json:"lastBrowserDisconnect,omitempty"`
+	LastOfferSent         time.Time `json:"lastOfferSent,omitempty"`
+	LastPeerState         string    `json:"lastPeerState,omitempty"`
+	LastICEState          string    `json:"lastIceState,omitempty"`
+	LastVideoEvent        string    `json:"lastVideoEvent,omitempty"`
+	LastVideoPlaying      time.Time `json:"lastVideoPlaying,omitempty"`
+	LastLogMessage        string    `json:"lastLogMessage,omitempty"`
+	LastError             string    `json:"lastError,omitempty"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -39,6 +59,7 @@ type Manager struct {
 	dispatcher *control.Dispatcher
 	mediaCtrl  *media.Controller
 	mu         sync.RWMutex
+	displayMu   sync.RWMutex
 
 	// Relay tracks: pilot's incoming video/audio forwarded to the display page.
 	videoRelay *webrtc.TrackLocalStaticRTP
@@ -50,6 +71,7 @@ type Manager struct {
 	pilotPC   *webrtc.PeerConnection
 	pilotMu   sync.Mutex
 	pilotGone chan struct{} // closed when the current pilot disconnects
+	display   DisplayHealth
 }
 
 // New creates a Manager.
@@ -59,7 +81,32 @@ func New(cfg config.Config, d *control.Dispatcher, mc *media.Controller) *Manage
 		dispatcher: d,
 		mediaCtrl:  mc,
 		pilotGone:  make(chan struct{}),
+		display: DisplayHealth{
+			LastPeerState:  "idle",
+			LastICEState:   "new",
+			LastVideoEvent: "idle",
+		},
 	}
+}
+
+// DisplayHealthSnapshot returns the latest server-side view of the display session.
+func (m *Manager) DisplayHealthSnapshot() DisplayHealth {
+	m.displayMu.RLock()
+	snapshot := m.display
+	m.displayMu.RUnlock()
+
+	m.mu.RLock()
+	snapshot.RelayVideo = m.videoRelay != nil
+	snapshot.RelayAudio = m.audioRelay != nil
+	m.mu.RUnlock()
+
+	return snapshot
+}
+
+func (m *Manager) updateDisplayHealth(update func(*DisplayHealth)) {
+	m.displayMu.Lock()
+	defer m.displayMu.Unlock()
+	update(&m.display)
 }
 
 // ServeHTTP handles the WebSocket upgrade and runs the full signaling + peer lifecycle.
@@ -86,9 +133,22 @@ func (m *Manager) ServeDisplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.BrowserConnected = true
+		h.LastBrowserConnect = time.Now()
+		h.LastError = ""
+	})
+	defer m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.BrowserConnected = false
+		h.SessionActive = false
+		h.LastBrowserDisconnect = time.Now()
+	})
 	log.Printf("display: browser connected from %s", r.RemoteAddr)
 
 	if err := m.runDisplaySession(conn); err != nil {
+		m.updateDisplayHealth(func(h *DisplayHealth) {
+			h.LastError = err.Error()
+		})
 		log.Printf("display: session ended: %v", err)
 	}
 }
@@ -118,18 +178,30 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 
 	defer func() {
 		_ = peerConn.Close()
-		// Clear relay tracks so the display doesn't get a stale offer after
-		// the pilot disconnects (forwardRTP goroutines will have stopped).
-		m.mu.Lock()
-		m.videoRelay = nil
-		m.audioRelay = nil
-		m.videoSSRC = 0
-		m.mu.Unlock()
+		// Only tear down shared pilot state if this session is still the current one.
 		m.pilotMu.Lock()
-		m.pilotPC = nil
+		isCurrentPilot := m.pilotPC == peerConn
+		if isCurrentPilot {
+			m.pilotPC = nil
+		}
+		shouldClosePilotGone := m.pilotGone == pilotGone
 		m.pilotMu.Unlock()
-		// Signal all active display sessions to close and reconnect.
-		close(pilotGone)
+
+		if isCurrentPilot {
+			// Clear relay tracks so the display doesn't get a stale offer after
+			// the current pilot disconnects (forwardRTP goroutines will have stopped).
+			m.mu.Lock()
+			m.videoRelay = nil
+			m.audioRelay = nil
+			m.videoSSRC = 0
+			m.mu.Unlock()
+		}
+
+		// Signal active display sessions to close and reconnect only for the
+		// pilot session that still owns the current pilotGone channel.
+		if shouldClosePilotGone {
+			close(pilotGone)
+		}
 		log.Printf("webrtc: peer connection closed")
 	}()
 
@@ -165,7 +237,8 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	// Receive pilot's video/audio. Create relay tracks so they can be forwarded
 	// to the robot's local display browser via ServeDisplay.
 	peerConn.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		log.Printf("webrtc: received %s track from pilot", track.Kind())
+		log.Printf("webrtc: received %s track from pilot (codec=%s ssrc=%d)",
+			track.Kind(), track.Codec().MimeType, track.SSRC())
 
 		relay, err := webrtc.NewTrackLocalStaticRTP(
 			track.Codec().RTPCodecCapability,
@@ -222,8 +295,16 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		}
 	})
 
-	// Add robot camera + mic tracks.
-	if err := m.mediaCtrl.AddTracksTo(peerConn); err != nil {
+	// Add robot camera + mic tracks. If a local media track ends, force a
+	// pilot reconnect so the UI does not stay on a frozen last frame.
+	var mediaReconnectOnce sync.Once
+	if err := m.mediaCtrl.AddTracksTo(peerConn, func() {
+		mediaReconnectOnce.Do(func() {
+			log.Printf("webrtc: local media track ended; forcing pilot reconnect")
+			_ = conn.Close()
+			_ = peerConn.Close()
+		})
+	}); err != nil {
 		return fmt.Errorf("add media tracks: %w", err)
 	}
 
@@ -301,9 +382,20 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 // The SERVER acts as offerer: it adds relay tracks and sends the offer to the display.
 // If no pilot is connected yet, it sends "no-pilot" and closes so the display retries.
 func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
+	// gorilla/websocket requires serialized writes. ICE candidate callbacks fire
+	// from pion goroutines concurrently with the main signaling loop and the
+	// pilotGone watcher, so all writes (including conn.Close) share one mutex.
+	var writeMu sync.Mutex
 	send := func(msg sigMsg) error {
 		data, _ := json.Marshal(msg)
+		writeMu.Lock()
+		defer writeMu.Unlock()
 		return conn.WriteMessage(websocket.TextMessage, data)
+	}
+	closeConn := func() {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		conn.Close()
 	}
 
 	// Check whether relay tracks are available (requires a pilot to be connected).
@@ -313,6 +405,12 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	m.mu.RUnlock()
 
 	log.Printf("display: relay state — video=%v audio=%v", videoRelay != nil, audioRelay != nil)
+	m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.SessionActive = videoRelay != nil
+		if videoRelay == nil {
+			h.LastPeerState = "waiting-for-pilot"
+		}
+	})
 
 	if videoRelay == nil {
 		log.Printf("display: no pilot connected yet, telling display to retry")
@@ -352,8 +450,17 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	if err != nil {
 		return fmt.Errorf("display: new peer connection: %w", err)
 	}
+	m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.SessionActive = true
+		h.LastPeerState = "new"
+		h.LastICEState = "new"
+	})
 	defer func() {
 		_ = peerConn.Close()
+		m.updateDisplayHealth(func(h *DisplayHealth) {
+			h.SessionActive = false
+			h.LastPeerState = "closed"
+		})
 		log.Printf("display: peer connection closed")
 	}()
 
@@ -364,6 +471,39 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	if audioRelay != nil {
 		if _, err := peerConn.AddTrack(audioRelay); err != nil {
 			return fmt.Errorf("display: add audio track: %w", err)
+		}
+	} else {
+		log.Printf("display: no audio relay track available")
+	}
+
+	// videoPlaying is closed when the display browser sends a "video-playing"
+	// message, signaling that Chromium is rendering frames and PLIs can stop.
+	videoPlaying := make(chan struct{})
+
+	// sessionDone is closed when runDisplaySession returns. Used to stop the
+	// PLI goroutine and the pilotGone watcher so they don't outlive the session.
+	sessionDone := make(chan struct{})
+	defer close(sessionDone)
+
+	// ICE candidates from pion fire concurrently (from pion goroutines) and can
+	// arrive at the browser BEFORE the offer if we send them immediately.
+	// Buffer them here and flush only after the offer has been sent, guaranteeing
+	// the browser always receives the offer first.
+	var (
+		iceBufMu   sync.Mutex
+		iceBuf     []sigMsg
+		offerSent  bool
+	)
+	sendAfterOffer := func(msg sigMsg) {
+		iceBufMu.Lock()
+		if !offerSent {
+			iceBuf = append(iceBuf, msg)
+			iceBufMu.Unlock()
+			return
+		}
+		iceBufMu.Unlock()
+		if err := send(msg); err != nil {
+			log.Printf("display: send ICE candidate: %v", err)
 		}
 	}
 
@@ -382,27 +522,51 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		if ci.SDPMLineIndex != nil {
 			idx = int(*ci.SDPMLineIndex)
 		}
-		if err := send(sigMsg{
+		sendAfterOffer(sigMsg{
 			Type:          "ice-candidate",
 			Candidate:     ci.Candidate,
 			SDPMid:        mid,
 			SDPMLineIndex: idx,
-		}); err != nil {
-			log.Printf("display: send ICE candidate: %v", err)
-		}
+		})
 	})
 
 	peerConn.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		m.updateDisplayHealth(func(h *DisplayHealth) {
+			h.LastICEState = state.String()
+		})
 		log.Printf("display: ICE connection state → %s", state)
 	})
 
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		m.updateDisplayHealth(func(h *DisplayHealth) {
+			h.LastPeerState = state.String()
+		})
 		log.Printf("display: connection state → %s", state)
 		if state == webrtc.PeerConnectionStateConnected {
-			// Request an immediate keyframe from the pilot so the display
-			// doesn't have to wait for the next periodic one (which could be
-			// many seconds away in a mid-stream relay).
-			m.sendPLI()
+			// The relay forwards VP8 mid-stream; Chromium can't render until it
+			// receives a keyframe. Send PLIs repeatedly every 1.5 s until the
+			// display browser confirms the video element is playing. We stop
+			// after 20 attempts (~30 s) — periodic keyframes will arrive naturally.
+			// sessionDone is closed when runDisplaySession returns, ensuring this
+			// goroutine never outlives its session (fixes goroutine leak on reconnect).
+			go func() {
+				ticker := time.NewTicker(1500 * time.Millisecond)
+				defer ticker.Stop()
+				for attempt := 1; attempt <= 20; attempt++ {
+					m.sendPLI()
+					log.Printf("display: PLI #%d sent", attempt)
+					select {
+					case <-videoPlaying:
+						log.Printf("display: video confirmed playing after %d PLI(s)", attempt)
+						return
+					case <-sessionDone:
+						log.Printf("display: session ended — PLI goroutine stopping at attempt %d", attempt)
+						return
+					case <-ticker.C:
+					}
+				}
+				log.Printf("display: PLI limit reached, stopping")
+			}()
 		}
 	})
 
@@ -416,8 +580,25 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	}
 
 	log.Printf("display: sending offer to browser (SDP length: %d)", len(offer.SDP))
+	m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.LastOfferSent = time.Now()
+	})
 	if err := send(sigMsg{Type: "offer", SDP: offer.SDP}); err != nil {
 		return fmt.Errorf("display: send offer: %w", err)
+	}
+
+	// Offer is now sent — flush any ICE candidates that arrived before we
+	// could send the offer, then allow future candidates through immediately.
+	iceBufMu.Lock()
+	offerSent = true
+	toFlush := iceBuf
+	iceBuf = nil
+	iceBufMu.Unlock()
+	for _, msg := range toFlush {
+		log.Printf("display: flushing buffered ICE candidate")
+		if err := send(msg); err != nil {
+			log.Printf("display: send buffered ICE candidate: %v", err)
+		}
 	}
 
 	// Receive answer and any ICE candidates from the display browser.
@@ -425,13 +606,11 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 
 	// When the pilot disconnects, close the WebSocket so the display browser
 	// retries and picks up the next pilot's relay tracks.
-	sessionDone := make(chan struct{})
-	defer close(sessionDone)
 	go func() {
 		select {
 		case <-pilotGone:
 			log.Printf("display: pilot gone — closing display session for reconnect")
-			conn.Close()
+			closeConn()
 		case <-sessionDone:
 		}
 	}()
@@ -489,6 +668,31 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 				pendingCandidates = append(pendingCandidates, init)
 			}
 
+		case "log":
+			// Log messages sent from the display browser, forwarded here
+			// so they appear in the robot log (and thus in the pilot's logs channel).
+			m.updateDisplayHealth(func(h *DisplayHealth) {
+				h.LastLogMessage = msg.Message
+				if idx := strings.Index(msg.Message, "video event: "); idx >= 0 {
+					h.LastVideoEvent = msg.Message[idx+len("video event: "):]
+				}
+			})
+			log.Printf("display[browser]: %s", msg.Message)
+
+		case "video-playing":
+			// Display browser confirmed the video element fired the "playing" event.
+			// Close the channel once (select guards against double-close).
+			m.updateDisplayHealth(func(h *DisplayHealth) {
+				h.LastVideoEvent = "playing"
+				h.LastVideoPlaying = time.Now()
+			})
+			select {
+			case <-videoPlaying:
+			default:
+				close(videoPlaying)
+			}
+			log.Printf("display: received video-playing confirmation")
+
 		case "close":
 			return nil
 		}
@@ -519,6 +723,7 @@ func (m *Manager) sendPLI() {
 	m.mu.RUnlock()
 
 	if pc == nil || ssrc == 0 {
+		log.Printf("display: PLI skipped (pilotPC=%v ssrc=%d)", pc != nil, ssrc)
 		return
 	}
 	if err := pc.WriteRTCP([]rtcp.Packet{

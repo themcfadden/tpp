@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TPPV4 — Robot Display</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; overflow: hidden; }
@@ -35,56 +36,141 @@
   <script>
     const video  = document.getElementById('pilotVideo');
     const status = document.getElementById('status');
+    const STALL_RELOAD_MS = 60000;
+
+    let lastVideoPlayingTs = 0;
+    let currentPcState = 'new';
+    let stallReloadArmed = false;
+
+    // ts() returns a compact HH:MM:SS.mmm timestamp for log messages.
+    function ts() {
+      const d = new Date();
+      return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+    }
+
+    // sendLog forwards a log message to the robot server over the WebSocket so
+    // it appears in the robot log (and in the pilot's logs data channel).
+    // Falls back to console.log if the WebSocket is not open.
+    let _ws = null;
+    function sendLog(msg) {
+      const line = `[${ts()}] ${msg}`;
+      console.log('display:', line);
+      if (_ws && _ws.readyState === WebSocket.OPEN) {
+        try { _ws.send(JSON.stringify({ type: 'log', message: line })); } catch (_) {}
+      }
+    }
+
+    function armStallReloadCheck() {
+      if (stallReloadArmed) return;
+      stallReloadArmed = true;
+      setTimeout(() => {
+        stallReloadArmed = false;
+        if (currentPcState !== 'connected') return;
+        const sincePlaying = Date.now() - lastVideoPlayingTs;
+        if (lastVideoPlayingTs === 0 || sincePlaying > STALL_RELOAD_MS) {
+          sendLog('stalled without playing for ' + sincePlaying + 'ms — reloading page');
+          location.reload();
+        }
+      }, STALL_RELOAD_MS);
+    }
+
+    function websocketUrl(path) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${location.host}${path}`;
+    }
+
+    // Register video element event listeners ONCE at module level so they don't
+    // accumulate across start() retries (the video element is persistent DOM).
+    // video-playing is sent to the server so it can stop sending PLIs.
+    for (const evt of ['loadedmetadata', 'canplay', 'playing', 'waiting', 'stalled', 'error', 'emptied']) {
+      video.addEventListener(evt, () => {
+        const extra = evt === 'error' && video.error
+          ? ' code=' + video.error.code + ' msg=' + video.error.message
+          : (evt === 'loadedmetadata' ? ' ' + video.videoWidth + 'x' + video.videoHeight : '');
+        sendLog('video event: ' + evt + extra);
+        if (evt === 'playing') {
+          lastVideoPlayingTs = Date.now();
+          try { _ws && _ws.send(JSON.stringify({ type: 'video-playing' })); } catch (_) {}
+        } else if (evt === 'waiting' || evt === 'stalled' || evt === 'emptied') {
+          armStallReloadCheck();
+        }
+      });
+    }
 
     async function start() {
       status.textContent = 'Connecting…';
+      sendLog('start() called — opening WebSocket');
 
-      const ws = new WebSocket(`ws://${location.host}/display-ws`);
+      const wsUrl = websocketUrl('/display-ws');
+      sendLog('display signaling url: ' + wsUrl);
+      const ws = new WebSocket(wsUrl);
+      _ws = ws;
       await new Promise((resolve, reject) => {
-        ws.onopen  = resolve;
-        ws.onerror = reject;
+        ws.onopen  = () => { sendLog('WebSocket open'); resolve(); };
+        ws.onerror = (e) => { sendLog('WebSocket error: ' + (e.message || 'unknown')); reject(e); };
       });
 
       let pc = null;
 
+      // Queue remote ICE candidates that arrive before or during setRemoteDescription.
+      // addIceCandidate requires the remote description to be set first.
+      const pendingCandidates = [];
+      let remoteDescSet = false;
+
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data);
+          sendLog('← ws message type=' + msg.type);
 
           if (msg.type === 'no-pilot') {
             // Server has no pilot yet — ws.onclose will trigger a retry.
+            sendLog('no-pilot received — will retry on close');
             status.textContent = 'Waiting for pilot…';
             ws.close();
 
           } else if (msg.type === 'offer') {
+            sendLog('offer received (SDP length=' + msg.sdp.length + ')');
             // Server is the offerer — create peer connection and answer.
             pc = new RTCPeerConnection({
               iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
             });
 
-            // ICE timeout: if ICE is still not connected after 10 s, retry.
+            // ICE timeout: log prolonged ICE checking. Keep the session alive;
+            // transient LAN/driver delays can exceed 10 s on cold boot.
             const iceTimeout = setTimeout(() => {
               const s = pc && pc.iceConnectionState;
-              if (s && s !== 'connected' && s !== 'completed') {
-                console.warn('display: ICE timeout (' + s + '), retrying');
-                ws.close();
+              sendLog('ICE timeout fired — iceConnectionState=' + s);
+              if (s && s !== 'connected' && s !== 'completed' && s !== 'failed') {
+                console.warn('display: ICE still checking after timeout (' + s + ')');
               }
-            }, 10000);
+            }, 30000);
 
             pc.ontrack = (e) => {
+              sendLog('ontrack kind=' + e.track.kind + ' id=' + e.track.id +
+                ' readyState=' + e.track.readyState + ' muted=' + e.track.muted);
               if (e.track.kind === 'video') {
                 video.srcObject = new MediaStream([e.track]);
-                video.play().catch(() => {});
+                sendLog('video.srcObject set — calling play()');
+                video.play()
+                  .then(() => sendLog('video.play() resolved'))
+                  .catch(err => sendLog('video.play() rejected: ' + err));
                 status.textContent = 'Connected';
+                armStallReloadCheck();
               } else if (e.track.kind === 'audio') {
                 const audio = new Audio();
                 audio.srcObject = new MediaStream([e.track]);
-                audio.play().catch(() => {});
+                audio.play()
+                  .then(() => sendLog('audio.play() resolved'))
+                  .catch(err => sendLog('audio.play() rejected: ' + err));
               }
             };
 
             pc.onicecandidate = (e) => {
-              if (!e.candidate) return;
+              if (!e.candidate) {
+                sendLog('local ICE gathering complete');
+                return;
+              }
+              sendLog('local ICE candidate: ' + e.candidate.candidate.split(' ').slice(0, 8).join(' '));
               ws.send(JSON.stringify({
                 type:          'ice-candidate',
                 candidate:     e.candidate.candidate,
@@ -93,60 +179,95 @@
               }));
             };
 
+            pc.oniceconnectionstatechange = () => {
+              sendLog('iceConnectionState → ' + pc.iceConnectionState);
+              if (pc.iceConnectionState === 'failed') {
+                sendLog('ICE failed — closing for retry');
+                console.warn('display: ICE failed, retrying');
+                ws.close();
+              }
+            };
+
+            pc.onicegatheringstatechange = () => {
+              sendLog('iceGatheringState → ' + pc.iceGatheringState);
+            };
+
+            pc.onsignalingstatechange = () => {
+              sendLog('signalingState → ' + pc.signalingState);
+            };
+
             pc.onconnectionstatechange = () => {
+              currentPcState = pc.connectionState;
+              sendLog('connectionState → ' + pc.connectionState);
               console.log('display state:', pc.connectionState);
               if (pc.connectionState === 'connected') {
-                // ICE + DTLS handshake complete; video should appear soon.
                 if (status.textContent === 'Connecting…') {
                   status.textContent = 'Connected';
                 }
-                clearTimeout(iceTimeout);
+                armStallReloadCheck();
               }
-              if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                clearTimeout(iceTimeout);
+              if (pc.connectionState === 'disconnected') {
+                status.textContent = 'Connection interrupted…';
+              }
+              if (pc.connectionState === 'failed') {
                 status.textContent = 'Disconnected — reconnecting…';
+                sendLog('connectionState ' + pc.connectionState + ' — closing for retry');
                 ws.close();
               }
             };
 
-            pc.oniceconnectionstatechange = () => {
-              console.log('display ICE:', pc.iceConnectionState);
-              if (pc.iceConnectionState === 'failed') {
-                console.warn('display: ICE failed, retrying');
-                clearTimeout(iceTimeout);
-                ws.close();
-              }
-            };
-
+            sendLog('setRemoteDescription(offer)');
             await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+            remoteDescSet = true;
+
+            // Drain any ICE candidates that arrived before/during setRemoteDescription.
+            sendLog('draining ' + pendingCandidates.length + ' queued remote ICE candidate(s)');
+            for (const c of pendingCandidates) {
+              await pc.addIceCandidate(c).catch(e => sendLog('addIceCandidate (queued) error: ' + e));
+            }
+            pendingCandidates.length = 0;
+
+            sendLog('createAnswer()');
             const answer = await pc.createAnswer();
+            sendLog('setLocalDescription(answer)');
             await pc.setLocalDescription(answer);
+            sendLog('sending answer (SDP length=' + answer.sdp.length + ')');
             ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
 
           } else if (msg.type === 'ice-candidate' && msg.candidate) {
-            if (pc) {
-              await pc.addIceCandidate({
-                candidate:     msg.candidate,
-                sdpMid:        msg.sdpMid,
-                sdpMLineIndex: msg.sdpMLineIndex,
-              });
+            const init = {
+              candidate:     msg.candidate,
+              sdpMid:        msg.sdpMid,
+              sdpMLineIndex: msg.sdpMLineIndex,
+            };
+            sendLog('remote ICE candidate: ' + msg.candidate.split(' ').slice(0, 8).join(' '));
+            if (remoteDescSet && pc) {
+              await pc.addIceCandidate(init).catch(e => sendLog('addIceCandidate error: ' + e));
+            } else {
+              sendLog('queuing remote ICE candidate (pc=' + (pc ? 'set' : 'null') +
+                ' remoteDescSet=' + remoteDescSet + ')');
+              pendingCandidates.push(init);
             }
           }
         } catch (err) {
           // Any signaling error (bad SDP, codec mismatch, etc.) → close and retry.
+          sendLog('signaling error: ' + err);
           console.error('display: signaling error:', err);
           status.textContent = 'Error — retrying…';
           ws.close();
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        sendLog('WebSocket closed code=' + e.code + ' reason=' + (e.reason || 'none'));
+        _ws = null;
         if (pc) { pc.close(); pc = null; }
         setTimeout(start, 1000);
       };
     }
 
     start().catch(err => {
+      sendLog('start() threw: ' + err);
       console.error('Display start failed:', err);
       status.textContent = 'Error — retrying…';
       setTimeout(start, 3000);

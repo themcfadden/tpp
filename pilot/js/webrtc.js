@@ -1,9 +1,14 @@
 // webrtc.js — RTCPeerConnection setup, signaling, and media management.
 
 import { channels }        from './protocol.js';
-import { setStatus, handleRobotStatus } from './ui.js';
+import { setStatus, handleRobotStatus, startDisplayHealthPolling } from './ui.js';
 
-const SIGNAL_URL = `ws://${location.host}/ws`;
+function websocketUrl(path) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}${path}`;
+}
+
+const SIGNAL_URL = websocketUrl('/ws');
 
 const iceConfig = {
   iceServers: [
@@ -15,13 +20,18 @@ const iceConfig = {
 };
 
 async function start() {
+  startDisplayHealthPolling();
   setStatus('connecting');
+  console.log('[webrtc] signaling url:', SIGNAL_URL);
 
   // ── WebSocket signaling connection ────────────────────────────────────────
   const ws = new WebSocket(SIGNAL_URL);
   await new Promise((resolve, reject) => {
     ws.onopen  = resolve;
-    ws.onerror = reject;
+    ws.onerror = (event) => {
+      console.error('[webrtc] signaling socket error:', event);
+      reject(event);
+    };
   });
 
   // ── RTCPeerConnection ─────────────────────────────────────────────────────
@@ -49,10 +59,13 @@ async function start() {
   let   videoTrackCount = 0;
 
   pc.ontrack = (event) => {
+    console.log('[webrtc] ontrack:', event.track.kind, 'id=' + event.track.id, 'readyState=' + event.track.readyState);
+    event.track.onended = () => console.warn('[webrtc] robot', event.track.kind, 'track ended id=' + event.track.id);
     if (event.track.kind === 'video') {
       // First video track is the main camera; additional tracks could be added later.
       if (videoTrackCount === 0) {
         robotVideo.srcObject = new MediaStream([event.track]);
+        robotVideo.play().catch(e => console.warn('[webrtc] robotVideo autoplay blocked:', e));
       }
       videoTrackCount++;
     } else if (event.track.kind === 'audio') {
@@ -137,6 +150,7 @@ async function start() {
   };
 
   ws.onclose = () => {
+    console.warn('[webrtc] signaling socket closed');
     setStatus('disconnected');
     pc.close();
     // Auto-reconnect after 3 seconds.

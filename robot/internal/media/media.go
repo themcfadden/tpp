@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/pion/mediadevices"
 	"github.com/pion/mediadevices/pkg/codec/opus"
 	"github.com/pion/mediadevices/pkg/codec/vpx"
+	"github.com/pion/mediadevices/pkg/frame"
 	"github.com/pion/mediadevices/pkg/prop"
 	"github.com/pion/webrtc/v4"
 
@@ -36,7 +38,15 @@ type Controller struct {
 	codecSelector *mediadevices.CodecSelector
 	mu            sync.Mutex
 	stream        mediadevices.MediaStream
+	captureMode   videoCaptureMode
 }
+
+type videoCaptureMode int
+
+const (
+	captureModeMJPEG videoCaptureMode = iota
+	captureModeDefault
+)
 
 // New initialises media codec parameters. Call once at startup.
 // Camera and mic are opened per-connection in AddTracksTo.
@@ -57,13 +67,19 @@ func New(cfg config.Config) (*Controller, error) {
 	)
 
 	log.Printf("media: codecs initialised (camera: %s)", cfg.CameraDevice)
-	return &Controller{cfg: cfg, codecSelector: codecSelector}, nil
+	return &Controller{
+		cfg:           cfg,
+		codecSelector: codecSelector,
+		captureMode:   captureModeMJPEG,
+	}, nil
 }
 
 // AddTracksTo opens a fresh camera+mic stream and adds the tracks to the given peer
 // connection. Any previously open stream is closed first so the driver is released
 // before re-opening (mediadevices allows only one open at a time).
-func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
+// onTrackEnd is called (once) if any track ends with an error — callers use this
+// to close the signaling WebSocket and trigger a pilot reconnect.
+func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection, onTrackEnd func()) error {
 	if c.codecSelector == nil {
 		return nil // stub/dev mode
 	}
@@ -81,9 +97,17 @@ func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	mode := c.captureMode
+
 	stream, err := mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
 		Video: func(mc *mediadevices.MediaTrackConstraints) {
 			mc.DeviceID = prop.String(c.cfg.CameraDevice)
+			mc.Width = prop.Int(640)
+			mc.Height = prop.Int(480)
+			mc.FrameRate = prop.Float(30)
+			if mode == captureModeMJPEG {
+				mc.FrameFormat = prop.FrameFormatExact(frame.FormatMJPEG)
+			}
 		},
 		Audio: func(mc *mediadevices.MediaTrackConstraints) {
 			mc.SampleRate   = prop.Int(48000)
@@ -92,14 +116,51 @@ func (c *Controller) AddTracksTo(pc *webrtc.PeerConnection) error {
 		Codec: c.codecSelector,
 	})
 	if err != nil {
-		return fmt.Errorf("media: GetUserMedia: %w", err)
+		if mode == captureModeMJPEG {
+			log.Printf("media: MJPEG capture failed (%v); retrying with default frame format", err)
+			c.captureMode = captureModeDefault
+			stream, err = mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
+				Video: func(mc *mediadevices.MediaTrackConstraints) {
+					mc.DeviceID = prop.String(c.cfg.CameraDevice)
+					mc.Width = prop.Int(640)
+					mc.Height = prop.Int(480)
+					mc.FrameRate = prop.Float(30)
+				},
+				Audio: func(mc *mediadevices.MediaTrackConstraints) {
+					mc.SampleRate = prop.Int(48000)
+					mc.ChannelCount = prop.Int(1)
+				},
+				Codec: c.codecSelector,
+			})
+			if err != nil {
+				return fmt.Errorf("media: GetUserMedia fallback: %w", err)
+			}
+			mode = captureModeDefault
+		} else {
+			return fmt.Errorf("media: GetUserMedia: %w", err)
+		}
 	}
 	c.stream = stream
 
+	var onceEnd sync.Once
 	for _, track := range stream.GetTracks() {
 		track.OnEnded(func(err error) {
 			if err != nil {
+				errText := err.Error()
 				log.Printf("media: track ended with error: %v", err)
+
+				c.mu.Lock()
+				switch {
+				case strings.Contains(errText, "frame length") && mode != captureModeMJPEG:
+					c.captureMode = captureModeMJPEG
+					log.Printf("media: switching capture mode to MJPEG after raw-frame error")
+				case strings.Contains(errText, "invalid JPEG") && mode == captureModeMJPEG:
+					c.captureMode = captureModeDefault
+					log.Printf("media: switching capture mode to default after JPEG decode error")
+				}
+				c.mu.Unlock()
+
+				onceEnd.Do(onTrackEnd)
 			}
 		})
 		if _, err := pc.AddTransceiverFromTrack(track,

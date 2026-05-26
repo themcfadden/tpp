@@ -1,20 +1,21 @@
 package main
 
 import (
-"context"
-"fmt"
-"log"
-"net/http"
-"os"
-"os/signal"
-"syscall"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
-"github.com/mattmc/tppv4/robot/config"
-"github.com/mattmc/tppv4/robot/internal/control"
-"github.com/mattmc/tppv4/robot/internal/hardware/maestro"
-"github.com/mattmc/tppv4/robot/internal/hardware/motor"
-"github.com/mattmc/tppv4/robot/internal/media"
-webrtcpeer "github.com/mattmc/tppv4/robot/internal/webrtc"
+	"github.com/mattmc/tppv4/robot/config"
+	"github.com/mattmc/tppv4/robot/internal/control"
+	"github.com/mattmc/tppv4/robot/internal/hardware/maestro"
+	"github.com/mattmc/tppv4/robot/internal/hardware/motor"
+	"github.com/mattmc/tppv4/robot/internal/media"
+	webrtcpeer "github.com/mattmc/tppv4/robot/internal/webrtc"
 )
 
 func main() {
@@ -82,7 +83,17 @@ pilotDir = "pilot"
 mux := http.NewServeMux()
 mux.Handle("/ws", peerManager)
 mux.Handle("/display-ws", http.HandlerFunc(peerManager.ServeDisplay))
+	mux.HandleFunc("/display-health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(peerManager.DisplayHealthSnapshot())
+	})
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		http.ServeFile(w, r, pilotDir+"/favicon.svg")
+	})
 mux.HandleFunc("/display", func(w http.ResponseWriter, r *http.Request) {
+	// Prevent Chromium kiosk from caching display.html so updates are always picked up.
+	w.Header().Set("Cache-Control", "no-store")
 	http.ServeFile(w, r, pilotDir+"/display.html")
 })
 mux.Handle("/", http.FileServer(http.Dir(pilotDir)))

@@ -33,6 +33,6 @@ function sendOn(dc, payload) {
     console.warn('[protocol] channel not open, dropping:', payload);
     return;
   }
-  console.log('[protocol] →', JSON.stringify(payload));
+  // console.log('[protocol] →', JSON.stringify(payload));
   dc.send(JSON.stringify(payload));
 }

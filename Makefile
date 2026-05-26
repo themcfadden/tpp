@@ -19,6 +19,7 @@ help:
 	@echo ""
 	@echo "  Raspberry Pi deployment (ROBOT_HOST defaults to mattmc@tpp.local):"
 	@echo "    rpi-setup      Install system deps and Go on the RPi (first-time only)"
+	@echo "    deploy-services Install/enable user systemd services and kiosk scripts"
 	@echo "    deploy         Sync source to RPi, build there, and restart the service"
 	@echo "    deploy-run     deploy + attach an interactive SSH session to the process"
 	@echo ""
@@ -78,6 +79,7 @@ build-arm:
 # ── Raspberry Pi ──────────────────────────────────────────────────────────────
 # tpp.local / 192.168.1.228 — ARM64 Raspberry Pi 4B
 # First-time setup:  make rpi-setup
+# Install services:   make deploy-services
 # Deploy + run:      make deploy
 #                    make deploy-run   (deploys then attaches to the process)
 
@@ -97,6 +99,19 @@ rpi-setup:
 	@echo ""
 	@echo "==> Setup complete on $(ROBOT_HOST)."
 	@echo "    Run 'make deploy' to sync source and build."
+
+.PHONY: deploy-services
+deploy-services:
+	@echo "==> Installing user services and kiosk scripts on $(ROBOT_HOST) ..."
+	ssh $(ROBOT_HOST) "mkdir -p $(REMOTE_DIR) ~/.local/bin ~/.config/systemd/user"
+	rsync -av deploy/ $(ROBOT_HOST):$(REMOTE_DIR)/deploy/
+	ssh $(ROBOT_HOST) "install -Dm755 $(REMOTE_DIR)/deploy/bin/tppv4-kiosk ~/.local/bin/tppv4-kiosk"
+	ssh $(ROBOT_HOST) "install -Dm755 $(REMOTE_DIR)/deploy/bin/tppv4-kiosk-postcheck ~/.local/bin/tppv4-kiosk-postcheck"
+	ssh $(ROBOT_HOST) "install -Dm644 $(REMOTE_DIR)/deploy/systemd/user/tppv4-robot.service ~/.config/systemd/user/tppv4-robot.service"
+	ssh $(ROBOT_HOST) "install -Dm644 $(REMOTE_DIR)/deploy/systemd/user/tppv4-kiosk.service ~/.config/systemd/user/tppv4-kiosk.service"
+	ssh $(ROBOT_HOST) "sudo loginctl enable-linger \$$USER"
+	ssh $(ROBOT_HOST) "systemctl --user daemon-reload && systemctl --user enable --now tppv4-robot.service tppv4-kiosk.service"
+	@echo "==> Services installed and enabled on $(ROBOT_HOST)."
 
 .PHONY: deploy
 deploy:

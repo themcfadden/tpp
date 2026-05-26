@@ -107,7 +107,7 @@ func (d *Dispatcher) HandleServoChannel(dc *webrtc.DataChannel) {
 		default:
 			return
 		}
-		log.Printf("control: servo pan=%.1f° tilt=%.1f°", d.panDeg, d.tiltDeg)
+		// log.Printf("control: servo pan=%.1f° tilt=%.1f°", d.panDeg, d.tiltDeg)
 		if err := d.maestro.SetServo(
 			uint8(d.cfg.MaestroPanChannel), d.panDeg,
 			d.cfg.PanMinUS, d.cfg.PanMaxUS,

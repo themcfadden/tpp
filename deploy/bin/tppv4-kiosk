@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# Avoid booting Chromium into a permanent error page: wait for robot HTTP.
+for _ in {1..90}; do
+  if curl -fsS --max-time 1 http://localhost:8080/ >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl -fsS --max-time 1 http://localhost:8080/ >/dev/null 2>&1; then
+  echo "tppv4-kiosk: robot HTTP not reachable on :8080; retrying via systemd restart"
+  exit 1
+fi
+
+exec /usr/bin/chromium \
+  --user-data-dir="$HOME/.config/chromium-tppv4-kiosk" \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --ozone-platform=wayland \
+  --password-store=basic \
+  --use-mock-keychain \
+  --disable-background-networking \
+  "http://localhost:8080/display"

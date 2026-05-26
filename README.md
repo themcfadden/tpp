@@ -56,6 +56,54 @@ MAESTRO_PORT=/dev/ttyACM0 MOTOR_DRIVER=uart MOTOR_PORT=/dev/ttyUSB0 ./tppv4-robo
 make deploy ROBOT_HOST=pi@192.168.1.100
 ```
 
+## Install User Services on Raspberry Pi
+
+The project includes user-level systemd service files for the robot process and Chromium kiosk display:
+
+- `deploy/systemd/user/tppv4-robot.service`
+- `deploy/systemd/user/tppv4-kiosk.service`
+- `deploy/bin/tppv4-kiosk`
+- `deploy/bin/tppv4-kiosk-postcheck`
+
+Install them on the Pi after cloning/syncing this repo to `~/tppv4`:
+
+```bash
+make deploy-services ROBOT_HOST=mattmc@tpp.local
+```
+
+Manual install steps (equivalent to `make deploy-services`):
+
+```bash
+ssh mattmc@tpp.local
+cd ~/tppv4
+
+# Install kiosk helper scripts.
+install -Dm755 deploy/bin/tppv4-kiosk ~/.local/bin/tppv4-kiosk
+install -Dm755 deploy/bin/tppv4-kiosk-postcheck ~/.local/bin/tppv4-kiosk-postcheck
+
+# Install user services.
+install -Dm644 deploy/systemd/user/tppv4-robot.service ~/.config/systemd/user/tppv4-robot.service
+install -Dm644 deploy/systemd/user/tppv4-kiosk.service ~/.config/systemd/user/tppv4-kiosk.service
+
+# Keep user services running after reboot without an active login shell.
+sudo loginctl enable-linger "$USER"
+
+systemctl --user daemon-reload
+systemctl --user enable --now tppv4-robot.service
+systemctl --user enable --now tppv4-kiosk.service
+
+# Verify
+systemctl --user status tppv4-robot.service --no-pager
+systemctl --user status tppv4-kiosk.service --no-pager
+```
+
+Operational notes:
+
+- `make deploy` rebuilds the robot binary and restarts `tppv4-robot.service`.
+- The kiosk service runs Chromium in kiosk mode at `http://localhost:8080/display`.
+- The kiosk launcher waits for the robot HTTP server on `:8080` before opening Chromium, to avoid boot-time "site can't be reached" pages.
+- The kiosk postcheck waits for startup and restarts kiosk once if display health reports a disconnected browser while relay video exists.
+
 ## Architecture
 
 See [`docs/webrtc-what-is-the-best-architecture-and-framework.md`](docs/webrtc-what-is-the-best-architecture-and-framework.md) for the full research report and architecture decisions.
@@ -64,6 +112,14 @@ See [`docs/webrtc-what-is-the-best-architecture-and-framework.md`](docs/webrtc-w
 
 ```
 tppv4/
+├── deploy/                # Deployment artifacts for Raspberry Pi user services
+│   ├── bin/
+│   │   ├── tppv4-kiosk
+│   │   └── tppv4-kiosk-postcheck
+│   └── systemd/
+│       └── user/
+│           ├── tppv4-kiosk.service
+│           └── tppv4-robot.service
 ├── robot/                 # Go robot process (WebRTC + hardware control)
 │   ├── cmd/robot/         # main.go entry point
 │   ├── internal/

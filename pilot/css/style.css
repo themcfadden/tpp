@@ -53,6 +53,12 @@ body {
 .status.disconnected { color: #f87171; }
 .status.connecting   { color: #facc15; }
 
+.display-status { color: #cbd5e1; }
+.display-status.ok { color: #34d399; }
+.display-status.waiting { color: #facc15; }
+.display-status.down { color: #fb7185; }
+.display-status.unknown { color: #cbd5e1; }
+
 /* ── Joystick pads ── */
 .pad {
   position: fixed;
