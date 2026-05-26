@@ -37,10 +37,12 @@
     const video  = document.getElementById('pilotVideo');
     const status = document.getElementById('status');
     const STALL_RELOAD_MS = 60000;
+    const CONNECTED_NO_VIDEO_RENEGOTIATE_MS = 8000;
 
     let lastVideoPlayingTs = 0;
     let currentPcState = 'new';
     let stallReloadArmed = false;
+    let connectedNoVideoTimer = null;
 
     // ts() returns a compact HH:MM:SS.mmm timestamp for log messages.
     function ts() {
@@ -74,6 +76,26 @@
       }, STALL_RELOAD_MS);
     }
 
+    function clearConnectedNoVideoTimer() {
+      if (!connectedNoVideoTimer) return;
+      clearTimeout(connectedNoVideoTimer);
+      connectedNoVideoTimer = null;
+    }
+
+    function armConnectedNoVideoRecovery() {
+      clearConnectedNoVideoTimer();
+      connectedNoVideoTimer = setTimeout(() => {
+        if (currentPcState !== 'connected') return;
+        const sincePlaying = lastVideoPlayingTs === 0
+          ? Number.POSITIVE_INFINITY
+          : Date.now() - lastVideoPlayingTs;
+        if (lastVideoPlayingTs === 0 || sincePlaying > CONNECTED_NO_VIDEO_RENEGOTIATE_MS) {
+          sendLog('connected but video not playing (' + sincePlaying + 'ms) — forcing renegotiation');
+          try { _ws && _ws.close(); } catch (_) {}
+        }
+      }, CONNECTED_NO_VIDEO_RENEGOTIATE_MS);
+    }
+
     function websocketUrl(path) {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${proto}//${location.host}${path}`;
@@ -90,9 +112,11 @@
         sendLog('video event: ' + evt + extra);
         if (evt === 'playing') {
           lastVideoPlayingTs = Date.now();
+          clearConnectedNoVideoTimer();
           try { _ws && _ws.send(JSON.stringify({ type: 'video-playing' })); } catch (_) {}
         } else if (evt === 'waiting' || evt === 'stalled' || evt === 'emptied') {
           armStallReloadCheck();
+          armConnectedNoVideoRecovery();
         }
       });
     }
@@ -156,6 +180,7 @@
                   .catch(err => sendLog('video.play() rejected: ' + err));
                 status.textContent = 'Connected';
                 armStallReloadCheck();
+                armConnectedNoVideoRecovery();
               } else if (e.track.kind === 'audio') {
                 const audio = new Audio();
                 audio.srcObject = new MediaStream([e.track]);
@@ -205,6 +230,7 @@
                   status.textContent = 'Connected';
                 }
                 armStallReloadCheck();
+                armConnectedNoVideoRecovery();
               }
               if (pc.connectionState === 'disconnected') {
                 status.textContent = 'Connection interrupted…';
@@ -260,8 +286,10 @@
 
       ws.onclose = (e) => {
         sendLog('WebSocket closed code=' + e.code + ' reason=' + (e.reason || 'none'));
+        clearConnectedNoVideoTimer();
         _ws = null;
         if (pc) { pc.close(); pc = null; }
+        video.srcObject = null;
         setTimeout(start, 1000);
       };
     }

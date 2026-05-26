@@ -66,6 +66,9 @@ type Manager struct {
 	mediaCtrl      *media.Controller
 	mu             sync.RWMutex
 	displayMu      sync.RWMutex
+	displayConnMu  sync.Mutex
+	displayConnID  int64
+	displayCloseFn func()
 	debugMu        sync.Mutex
 	debugEvents    []DebugEvent
 	pilotSessionID int64
@@ -145,6 +148,24 @@ func (m *Manager) DebugEventsSnapshot(limit int) []DebugEvent {
 	out := make([]DebugEvent, limit)
 	copy(out, m.debugEvents[start:])
 	return out
+}
+
+// ForceDisplayReconnect closes the active display websocket (if any).
+// The display page auto-reconnects, so this is safe to trigger as recovery.
+func (m *Manager) ForceDisplayReconnect(reason string) bool {
+	m.displayConnMu.Lock()
+	id := m.displayConnID
+	closeFn := m.displayCloseFn
+	m.displayConnMu.Unlock()
+
+	if closeFn == nil {
+		m.debugf("display", "force reconnect requested (%s) but no active display session", reason)
+		return false
+	}
+
+	m.debugf("display", "force reconnect requested (%s) closing session id=%d", reason, id)
+	closeFn()
+	return true
 }
 
 // ServeHTTP handles the WebSocket upgrade and runs the full signaling + peer lifecycle.
@@ -460,6 +481,19 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		defer writeMu.Unlock()
 		conn.Close()
 	}
+
+	m.displayConnMu.Lock()
+	m.displayConnID = displayID
+	m.displayCloseFn = closeConn
+	m.displayConnMu.Unlock()
+	defer func() {
+		m.displayConnMu.Lock()
+		if m.displayConnID == displayID {
+			m.displayConnID = 0
+			m.displayCloseFn = nil
+		}
+		m.displayConnMu.Unlock()
+	}()
 
 	// Check whether relay tracks are available (requires a pilot to be connected).
 	m.mu.RLock()

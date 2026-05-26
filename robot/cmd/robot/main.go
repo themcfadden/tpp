@@ -108,6 +108,14 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(peerManager.DebugEventsSnapshot(limit))
 	})
+	mux.HandleFunc("/debug/display-reconnect", func(w http.ResponseWriter, r *http.Request) {
+		triggered := peerManager.ForceDisplayReconnect("http debug endpoint")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":        true,
+			"triggered": triggered,
+		})
+	})
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/svg+xml")
 		http.ServeFile(w, r, pilotDir+"/favicon.svg")
