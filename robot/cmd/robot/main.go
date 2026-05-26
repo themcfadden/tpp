@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/mattmc/tppv4/robot/config"
@@ -96,6 +97,16 @@ func main() {
 	mux.HandleFunc("/display-health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(peerManager.DisplayHealthSnapshot())
+	})
+	mux.HandleFunc("/debug/webrtc-events", func(w http.ResponseWriter, r *http.Request) {
+		limit := 200
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil {
+				limit = n
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(peerManager.DebugEventsSnapshot(limit))
 	})
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/svg+xml")

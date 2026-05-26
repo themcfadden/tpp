@@ -49,17 +49,27 @@ type DisplayHealth struct {
 	LastError             string    `json:"lastError,omitempty"`
 }
 
+type DebugEvent struct {
+	Time  time.Time `json:"time"`
+	Scope string    `json:"scope"`
+	Event string    `json:"event"`
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 // Manager creates and manages WebRTC peer connections for incoming pilots.
 type Manager struct {
-	cfg        config.Config
-	dispatcher *control.Dispatcher
-	mediaCtrl  *media.Controller
-	mu         sync.RWMutex
-	displayMu   sync.RWMutex
+	cfg            config.Config
+	dispatcher     *control.Dispatcher
+	mediaCtrl      *media.Controller
+	mu             sync.RWMutex
+	displayMu      sync.RWMutex
+	debugMu        sync.Mutex
+	debugEvents    []DebugEvent
+	pilotSessionID int64
+	relaySessionID int64
 
 	// Relay tracks: pilot's incoming video/audio forwarded to the display page.
 	videoRelay *webrtc.TrackLocalStaticRTP
@@ -77,10 +87,11 @@ type Manager struct {
 // New creates a Manager.
 func New(cfg config.Config, d *control.Dispatcher, mc *media.Controller) *Manager {
 	return &Manager{
-		cfg:        cfg,
-		dispatcher: d,
-		mediaCtrl:  mc,
-		pilotGone:  make(chan struct{}),
+		cfg:         cfg,
+		dispatcher:  d,
+		mediaCtrl:   mc,
+		pilotGone:   make(chan struct{}),
+		debugEvents: make([]DebugEvent, 0, 256),
 		display: DisplayHealth{
 			LastPeerState:  "idle",
 			LastICEState:   "new",
@@ -109,18 +120,45 @@ func (m *Manager) updateDisplayHealth(update func(*DisplayHealth)) {
 	update(&m.display)
 }
 
+func (m *Manager) debugf(scope, format string, args ...any) {
+	line := fmt.Sprintf(format, args...)
+	log.Printf("%s: %s", scope, line)
+	m.debugMu.Lock()
+	m.debugEvents = append(m.debugEvents, DebugEvent{
+		Time:  time.Now(),
+		Scope: scope,
+		Event: line,
+	})
+	if len(m.debugEvents) > 400 {
+		m.debugEvents = append([]DebugEvent(nil), m.debugEvents[len(m.debugEvents)-400:]...)
+	}
+	m.debugMu.Unlock()
+}
+
+func (m *Manager) DebugEventsSnapshot(limit int) []DebugEvent {
+	m.debugMu.Lock()
+	defer m.debugMu.Unlock()
+	if limit <= 0 || limit > len(m.debugEvents) {
+		limit = len(m.debugEvents)
+	}
+	start := len(m.debugEvents) - limit
+	out := make([]DebugEvent, limit)
+	copy(out, m.debugEvents[start:])
+	return out
+}
+
 // ServeHTTP handles the WebSocket upgrade and runs the full signaling + peer lifecycle.
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("webrtc: ws upgrade: %v", err)
+		m.debugf("pilot", "ws upgrade failed: %v", err)
 		return
 	}
 	defer conn.Close()
-	log.Printf("webrtc: pilot connected from %s", r.RemoteAddr)
+	m.debugf("pilot", "connected from %s", r.RemoteAddr)
 
 	if err := m.runSession(conn); err != nil {
-		log.Printf("webrtc: session ended: %v", err)
+		m.debugf("pilot", "session ended: %v", err)
 	}
 }
 
@@ -129,7 +167,7 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) ServeDisplay(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("display: ws upgrade: %v", err)
+		m.debugf("display", "ws upgrade failed: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -143,17 +181,33 @@ func (m *Manager) ServeDisplay(w http.ResponseWriter, r *http.Request) {
 		h.SessionActive = false
 		h.LastBrowserDisconnect = time.Now()
 	})
-	log.Printf("display: browser connected from %s", r.RemoteAddr)
+	m.debugf("display", "browser connected from %s", r.RemoteAddr)
 
 	if err := m.runDisplaySession(conn); err != nil {
 		m.updateDisplayHealth(func(h *DisplayHealth) {
 			h.LastError = err.Error()
 		})
-		log.Printf("display: session ended: %v", err)
+		m.debugf("display", "session ended: %v", err)
 	}
 }
 
 func (m *Manager) runSession(conn *websocket.Conn) error {
+	sessionID := time.Now().UnixNano()
+	m.debugf("pilot", "session start id=%d", sessionID)
+	// Mark this as the current pilot session and clear relays immediately.
+	// This prevents display reconnects from attaching to stale relay tracks
+	// while the new pilot is still negotiating and before new OnTrack arrives.
+	m.mu.Lock()
+	m.pilotSessionID = sessionID
+	m.videoRelay = nil
+	m.audioRelay = nil
+	m.videoSSRC = 0
+	m.relaySessionID = 0
+	m.mu.Unlock()
+	m.updateDisplayHealth(func(h *DisplayHealth) {
+		h.LastVideoEvent = "waiting-for-fresh-relay"
+	})
+
 	// Broadcast to any waiting display sessions that a new pilot is present.
 	pilotGone := make(chan struct{})
 	m.pilotMu.Lock()
@@ -184,7 +238,6 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		if isCurrentPilot {
 			m.pilotPC = nil
 		}
-		shouldClosePilotGone := m.pilotGone == pilotGone
 		m.pilotMu.Unlock()
 
 		if isCurrentPilot {
@@ -194,15 +247,17 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 			m.videoRelay = nil
 			m.audioRelay = nil
 			m.videoSSRC = 0
+			m.relaySessionID = 0
 			m.mu.Unlock()
 		}
 
-		// Signal active display sessions to close and reconnect only for the
-		// pilot session that still owns the current pilotGone channel.
-		if shouldClosePilotGone {
-			close(pilotGone)
-		}
-		log.Printf("webrtc: peer connection closed")
+		// Always close this session's pilotGone channel so any display session
+		// that captured it knows to reconnect. Each runSession call creates its
+		// own channel, so this is safe regardless of whether a newer session has
+		// already replaced m.pilotGone. Skipping this close is what caused the
+		// display to freeze after a pilot refresh.
+		close(pilotGone)
+		m.debugf("pilot", "session close id=%d isCurrent=%v", sessionID, isCurrentPilot)
 	}()
 
 	send := func(msg sigMsg) {
@@ -237,7 +292,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	// Receive pilot's video/audio. Create relay tracks so they can be forwarded
 	// to the robot's local display browser via ServeDisplay.
 	peerConn.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		log.Printf("webrtc: received %s track from pilot (codec=%s ssrc=%d)",
+		m.debugf("pilot", "track kind=%s codec=%s ssrc=%d",
 			track.Kind(), track.Codec().MimeType, track.SSRC())
 
 		relay, err := webrtc.NewTrackLocalStaticRTP(
@@ -254,8 +309,12 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		if track.Kind() == webrtc.RTPCodecTypeVideo {
 			m.videoRelay = relay
 			m.videoSSRC = uint32(track.SSRC())
+			m.relaySessionID = sessionID
 		} else {
 			m.audioRelay = relay
+			if m.relaySessionID == 0 {
+				m.relaySessionID = sessionID
+			}
 		}
 		m.mu.Unlock()
 
@@ -264,7 +323,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 	})
 
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("webrtc: connection state → %s", state)
+		m.debugf("pilot", "connection state -> %s", state)
 		if state == webrtc.PeerConnectionStateDisconnected ||
 			state == webrtc.PeerConnectionStateFailed {
 			_ = m.dispatcher.EmergencyStop()
@@ -273,7 +332,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 
 	// Wire data channels from pilot.
 	peerConn.OnDataChannel(func(dc *webrtc.DataChannel) {
-		log.Printf("webrtc: data channel opened: %s", dc.Label())
+		m.debugf("pilot", "data channel opened: %s", dc.Label())
 		switch dc.Label() {
 		case "drive":
 			m.dispatcher.HandleDriveChannel(dc)
@@ -285,12 +344,12 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 			m.dispatcher.SetStatusChannel(dc)
 		case "logs":
 			dc.OnOpen(func() {
-				log.Printf("webrtc: logs channel open — mirroring log output to pilot")
+				m.debugf("pilot", "logs channel open")
 				log.SetOutput(io.MultiWriter(os.Stderr, &dcWriter{dc: dc}))
 			})
 			dc.OnClose(func() {
 				log.SetOutput(os.Stderr)
-				log.Printf("webrtc: logs channel closed — log output restored to stderr")
+				m.debugf("pilot", "logs channel closed")
 			})
 		}
 	})
@@ -334,6 +393,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 		}
 		switch msg.Type {
 		case "offer":
+			m.debugf("pilot", "offer received id=%d sdpLen=%d", sessionID, len(msg.SDP))
 			if err := peerConn.SetRemoteDescription(webrtc.SessionDescription{
 				Type: webrtc.SDPTypeOffer,
 				SDP:  msg.SDP,
@@ -354,6 +414,7 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 				return fmt.Errorf("set local description: %w", err)
 			}
 			send(sigMsg{Type: "answer", SDP: answer.SDP})
+			m.debugf("pilot", "answer sent id=%d sdpLen=%d", sessionID, len(answer.SDP))
 
 		case "ice-candidate":
 			if msg.Candidate == "" {
@@ -382,6 +443,8 @@ func (m *Manager) runSession(conn *websocket.Conn) error {
 // The SERVER acts as offerer: it adds relay tracks and sends the offer to the display.
 // If no pilot is connected yet, it sends "no-pilot" and closes so the display retries.
 func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
+	displayID := time.Now().UnixNano()
+	m.debugf("display", "session start id=%d", displayID)
 	// gorilla/websocket requires serialized writes. ICE candidate callbacks fire
 	// from pion goroutines concurrently with the main signaling loop and the
 	// pilotGone watcher, so all writes (including conn.Close) share one mutex.
@@ -402,18 +465,21 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	m.mu.RLock()
 	videoRelay := m.videoRelay
 	audioRelay := m.audioRelay
+	pilotSessionID := m.pilotSessionID
+	relaySessionID := m.relaySessionID
 	m.mu.RUnlock()
 
-	log.Printf("display: relay state — video=%v audio=%v", videoRelay != nil, audioRelay != nil)
+	relayFresh := videoRelay != nil && relaySessionID != 0 && relaySessionID == pilotSessionID
+	m.debugf("display", "relay state id=%d video=%v audio=%v relaySession=%d pilotSession=%d fresh=%v", displayID, videoRelay != nil, audioRelay != nil, relaySessionID, pilotSessionID, relayFresh)
 	m.updateDisplayHealth(func(h *DisplayHealth) {
-		h.SessionActive = videoRelay != nil
-		if videoRelay == nil {
+		h.SessionActive = relayFresh
+		if !relayFresh {
 			h.LastPeerState = "waiting-for-pilot"
 		}
 	})
 
-	if videoRelay == nil {
-		log.Printf("display: no pilot connected yet, telling display to retry")
+	if !relayFresh {
+		m.debugf("display", "relay not ready/fresh id=%d", displayID)
 		_ = send(sigMsg{Type: "no-pilot"})
 		return nil
 	}
@@ -461,10 +527,10 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			h.SessionActive = false
 			h.LastPeerState = "closed"
 		})
-		log.Printf("display: peer connection closed")
+		m.debugf("display", "session close id=%d", displayID)
 	}()
 
-	log.Printf("display: adding relay tracks to peer connection")
+	m.debugf("display", "adding relay tracks id=%d", displayID)
 	if _, err := peerConn.AddTrack(videoRelay); err != nil {
 		return fmt.Errorf("display: add video track: %w", err)
 	}
@@ -473,7 +539,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			return fmt.Errorf("display: add audio track: %w", err)
 		}
 	} else {
-		log.Printf("display: no audio relay track available")
+		m.debugf("display", "no audio relay track id=%d", displayID)
 	}
 
 	// videoPlaying is closed when the display browser sends a "video-playing"
@@ -490,9 +556,9 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	// Buffer them here and flush only after the offer has been sent, guaranteeing
 	// the browser always receives the offer first.
 	var (
-		iceBufMu   sync.Mutex
-		iceBuf     []sigMsg
-		offerSent  bool
+		iceBufMu  sync.Mutex
+		iceBuf    []sigMsg
+		offerSent bool
 	)
 	sendAfterOffer := func(msg sigMsg) {
 		iceBufMu.Lock()
@@ -534,14 +600,14 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		m.updateDisplayHealth(func(h *DisplayHealth) {
 			h.LastICEState = state.String()
 		})
-		log.Printf("display: ICE connection state → %s", state)
+		m.debugf("display", "ice state id=%d -> %s", displayID, state)
 	})
 
 	peerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		m.updateDisplayHealth(func(h *DisplayHealth) {
 			h.LastPeerState = state.String()
 		})
-		log.Printf("display: connection state → %s", state)
+		m.debugf("display", "connection state id=%d -> %s", displayID, state)
 		if state == webrtc.PeerConnectionStateConnected {
 			// The relay forwards VP8 mid-stream; Chromium can't render until it
 			// receives a keyframe. Send PLIs repeatedly every 1.5 s until the
@@ -570,7 +636,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		}
 	})
 
-	log.Printf("display: creating offer")
+	m.debugf("display", "creating offer id=%d", displayID)
 	offer, err := peerConn.CreateOffer(nil)
 	if err != nil {
 		return fmt.Errorf("display: create offer: %w", err)
@@ -579,7 +645,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 		return fmt.Errorf("display: set local description: %w", err)
 	}
 
-	log.Printf("display: sending offer to browser (SDP length: %d)", len(offer.SDP))
+	m.debugf("display", "sending offer id=%d sdpLen=%d", displayID, len(offer.SDP))
 	m.updateDisplayHealth(func(h *DisplayHealth) {
 		h.LastOfferSent = time.Now()
 	})
@@ -609,7 +675,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 	go func() {
 		select {
 		case <-pilotGone:
-			log.Printf("display: pilot gone — closing display session for reconnect")
+			m.debugf("display", "pilot gone signal id=%d -> closing for reconnect", displayID)
 			closeConn()
 		case <-sessionDone:
 		}
@@ -636,7 +702,7 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			log.Printf("display: bad signaling message: %v", err)
 			continue
 		}
-		log.Printf("display: ← %s", msg.Type)
+		m.debugf("display", "ws message id=%d type=%s", displayID, msg.Type)
 		switch msg.Type {
 		case "answer":
 			if err := peerConn.SetRemoteDescription(webrtc.SessionDescription{
