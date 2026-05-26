@@ -2,17 +2,69 @@
 // All input is routed through protocol.js — never touches the DOM directly
 // except to move knobs.
 
-import { sendDrive, sendStop, sendServo, sendServoDelta, sendLaser } from './protocol.js';
+import { sendDrive, sendStop, sendServo, sendLaser, sendLaserAim } from './protocol.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 let laserOn = false;
+let camPan = 0;
+let camTilt = 0;
+let laserPan = 0;
+let laserTilt = 45; // down position
+const TILT_DOWN_DEG = 45;
+
+const cameraKnob = document.getElementById('cameraKnob');
+const laserKnob = document.getElementById('laserKnob');
+const laserPad = document.getElementById('laserPad');
+
+function setCameraKnob(nx, ny) {
+  cameraKnob.style.left = `${50 + nx * 35}%`;
+  cameraKnob.style.top  = `${50 + ny * 35}%`;
+}
+
+function setLaserKnob(nx, ny) {
+  laserKnob.style.left = `${50 + nx * 35}%`;
+  laserKnob.style.top  = `${50 + ny * 35}%`;
+}
+
+function updateCameraPose(pan, tilt) {
+  camPan = Math.max(-90, Math.min(90, pan));
+  camTilt = Math.max(-45, Math.min(45, tilt));
+  sendServo(camPan, camTilt);
+}
+
+function pointLaserDown() {
+  updateLaserPose(0, TILT_DOWN_DEG);
+  setLaserKnob(0, 1);
+}
+
+function updateLaserPose(pan, tilt) {
+  laserPan = Math.max(-90, Math.min(90, pan));
+  laserTilt = Math.max(-45, Math.min(45, tilt));
+  sendLaserAim(laserPan, laserTilt);
+}
+
+function setLaserState(on) {
+  if (laserOn === on) return;
+  laserOn = on;
+  sendLaser(laserOn);
+  updateLaserUI();
+}
 
 // ── Joystick (custom pointer-events, zero dependencies) ──────────────────────
 
-function attachPad(padId, knobId, onMove, onRelease) {
+function attachPad(padId, knobId, onMove, onRelease, opts = {}) {
   const pad  = document.getElementById(padId);
   const knob = document.getElementById(knobId);
   let active = false;
+  const resetX = opts.resetX ?? 0;
+  const resetY = opts.resetY ?? 0;
+  const resetOnRelease = opts.resetOnRelease ?? true;
+  const onPress = opts.onPress ?? (() => {});
+
+  function setKnobPosition(nx, ny) {
+    knob.style.left = `${50 + nx * 35}%`;
+    knob.style.top  = `${50 + ny * 35}%`;
+  }
 
   function handleMove(clientX, clientY) {
     const rect   = pad.getBoundingClientRect();
@@ -25,14 +77,14 @@ function attachPad(padId, knobId, onMove, onRelease) {
     if (dist > maxR) { dx *= maxR / dist; dy *= maxR / dist; }
     const nx = dx / maxR;   // -1..1
     const ny = dy / maxR;   // -1..1
-    knob.style.left = `${50 + nx * 35}%`;
-    knob.style.top  = `${50 + ny * 35}%`;
+    setKnobPosition(nx, ny);
     onMove(nx, ny);
   }
 
   pad.addEventListener('pointerdown', e => {
     active = true;
     pad.setPointerCapture(e.pointerId); // keep tracking if finger slides off
+    onPress(e);
     handleMove(e.clientX, e.clientY);
   });
   pad.addEventListener('pointermove', e => { if (active) handleMove(e.clientX, e.clientY); });
@@ -40,7 +92,9 @@ function attachPad(padId, knobId, onMove, onRelease) {
   const release = () => {
     if (!active) return;
     active = false;
-    knob.style.left = knob.style.top = '50%';
+    if (resetOnRelease) {
+      setKnobPosition(resetX, resetY);
+    }
     onRelease();
   };
   pad.addEventListener('pointerup',     release);
@@ -54,27 +108,40 @@ attachPad('drivePad', 'driveKnob',
 );
 
 // Camera pad: push joystick → send servo absolute position; hold last on release.
-let camPan = 0, camTilt = 0;
 attachPad('cameraPad', 'cameraKnob',
   (x, y) => {
-    camPan  = Math.round(-x * 90);   // -90..90 deg
-    camTilt = Math.round( y * 45);   // -45..45 deg
-    sendServo(camPan, camTilt);
+    updateCameraPose(
+      Math.round(-x * 90),
+      Math.round(y * 45),
+    );
   },
-  () => {}  // hold last camera position on release
+  () => {},  // hold last position on release
+  {
+    resetOnRelease: false,
+  }
 );
 
-// ── Laser button ──────────────────────────────────────────────────────────────
-
-const laserBtn = document.getElementById('laserBtn');
-laserBtn.addEventListener('click', () => {
-  laserOn = !laserOn;
-  sendLaser(laserOn);
-  updateLaserUI();
-});
+// Laser pad: move to aim; hold pad press to fire; release to stop and point down.
+attachPad('laserPad', 'laserKnob',
+  (x, y) => {
+    updateLaserPose(
+      Math.round(-x * 90),
+      Math.round(y * 45),
+    );
+  },
+  () => {
+    setLaserState(false);
+    pointLaserDown();
+  },
+  {
+    onPress: () => setLaserState(true),
+    resetX: 0,
+    resetY: 1,
+  }
+);
 
 function updateLaserUI() {
-  laserBtn.classList.toggle('active', laserOn);
+  laserPad.classList.toggle('active', laserOn);
   const el = document.getElementById('laserStatus');
   el.textContent = laserOn ? '🔴 Laser ON' : '🔴 Laser OFF';
   el.className   = laserOn ? 'laser-on'   : 'laser-off';
@@ -86,10 +153,16 @@ const heldKeys = new Set();
 document.addEventListener('keydown', e => {
   const nav = ['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
   if (nav.includes(e.code)) { e.preventDefault(); heldKeys.add(e.code); }
-  if (e.code === 'KeyL')   { laserOn = !laserOn; sendLaser(laserOn); updateLaserUI(); }
+  if (e.code === 'KeyL')   { e.preventDefault(); setLaserState(true); }
   if (e.code === 'Space')  { e.preventDefault(); sendStop(); }
 });
-document.addEventListener('keyup', e => heldKeys.delete(e.code));
+document.addEventListener('keyup', e => {
+  heldKeys.delete(e.code);
+  if (e.code === 'KeyL') {
+    setLaserState(false);
+    pointLaserDown();
+  }
+});
 
 let lastKX = 0, lastKY = 0;
 function keyboardLoop() {
@@ -108,12 +181,13 @@ function keyboardLoop() {
 requestAnimationFrame(keyboardLoop);
 
 // ── Gamepad API ───────────────────────────────────────────────────────────────
-// Left stick (axes 0/1): drive. Right stick (axes 2/3): camera delta.
-// Left bumper (btn 4): laser toggle.
+// Left stick (axes 0/1): drive. Right stick (axes 2/3): camera pan/tilt.
+// Left stick button (btn 10): laser on while held.
+// D-pad (buttons 12/13/14/15): laser pan/tilt aiming.
 
 const DEADZONE = 0.08;
-let gpLX=0, gpLY=0, gpRX=0, gpRY=0;
-let gpLB = false;
+let gpLX = 0, gpLY = 0, gpRX = 0, gpRY = 0;
+let gpR3 = false;
 
 function pollGamepad() {
   const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -132,13 +206,33 @@ function pollGamepad() {
     }
     if (rx !== gpRX || ry !== gpRY) {
       gpRX = rx; gpRY = ry;
-      sendServoDelta(rx * 5, ry * 5); // incremental camera pan/tilt
+      updateCameraPose(
+        Math.round(-rx * 90),
+        Math.round(ry * 45),
+      );
+      setCameraKnob(rx, ry);
     }
 
-    // Left bumper (button 4) — laser toggle on press
-    const lb = gp.buttons[4]?.pressed ?? false;
-    if (lb && !gpLB) { laserOn = !laserOn; sendLaser(laserOn); updateLaserUI(); }
-    gpLB = lb;
+    const dpadX = (gp.buttons[15]?.pressed ? 1 : 0) - (gp.buttons[14]?.pressed ? 1 : 0);
+    const dpadY = (gp.buttons[13]?.pressed ? 1 : 0) - (gp.buttons[12]?.pressed ? 1 : 0);
+    if (dpadX !== 0 || dpadY !== 0) {
+      updateLaserPose(
+        Math.round(laserPan + (-dpadX * 3)),
+        Math.round(laserTilt + (dpadY * 2)),
+      );
+      setLaserKnob(laserPan / 90, laserTilt / 45);
+    }
+
+    const r3 = gp.buttons[10]?.pressed ?? false;
+    if (r3 !== gpR3) {
+      if (r3) {
+        setLaserState(true);
+      } else {
+        setLaserState(false);
+        pointLaserDown();
+      }
+      gpR3 = r3;
+    }
   }
   requestAnimationFrame(pollGamepad);
 }
@@ -151,3 +245,5 @@ window.addEventListener('gamepadconnected', e => {
 function applyDeadzone(v) {
   return Math.abs(v) > DEADZONE ? v : 0;
 }
+
+pointLaserDown();

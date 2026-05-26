@@ -22,6 +22,8 @@ type Config struct {
 	// Maestro channel assignments
 	MaestroPanChannel   int `yaml:"maestro_pan_channel"`
 	MaestroTiltChannel  int `yaml:"maestro_tilt_channel"`
+	MaestroLaserPanChannel int `yaml:"maestro_laser_pan_channel"`
+	MaestroLaserTiltChannel int `yaml:"maestro_laser_tilt_channel"`
 	MaestroLaserChannel int `yaml:"maestro_laser_channel"`
 
 	// Servo calibration (microseconds)
@@ -43,6 +45,8 @@ func Defaults() Config {
 		MotorBaud:           115200,
 		MaestroPanChannel:   0,
 		MaestroTiltChannel:  1,
+		MaestroLaserPanChannel: 3,
+		MaestroLaserTiltChannel: 4,
 		MaestroLaserChannel: 2,
 		PanMinUS:            992,
 		PanMaxUS:            2000,

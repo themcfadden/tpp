@@ -28,6 +28,11 @@ export function sendLaser(on) {
   sendOn(channels.laser, { type: 'laser', on });
 }
 
+/** Send an absolute laser gimbal position (degrees). */
+export function sendLaserAim(pan, tilt) {
+  sendOn(channels.laser, { type: 'laser_aim', pan, tilt });
+}
+
 function sendOn(dc, payload) {
   if (!dc || dc.readyState !== 'open') {
     console.warn('[protocol] channel not open, dropping:', payload);

@@ -38,6 +38,8 @@ type Dispatcher struct {
 	// current servo state (degrees)
 	panDeg  float64
 	tiltDeg float64
+	laserPanDeg float64
+	laserTiltDeg float64
 	laserOn bool
 }
 
@@ -47,6 +49,7 @@ func New(cfg config.Config, m *maestro.Maestro, mc motor.MotorController) *Dispa
 		cfg:     cfg,
 		maestro: m,
 		motors:  mc,
+		laserTiltDeg: 45,
 	}
 }
 
@@ -131,14 +134,29 @@ func (d *Dispatcher) HandleLaserChannel(dc *webrtc.DataChannel) {
 			log.Printf("control: bad laser message: %v", err)
 			return
 		}
-		if c.Type != "laser" {
-			return
+		switch c.Type {
+		case "laser_aim":
+			d.laserPanDeg = clampAngle(c.Pan, -90, 90)
+			d.laserTiltDeg = clampAngle(c.Tilt, -45, 45)
+			if err := d.maestro.SetServo(
+				uint8(d.cfg.MaestroLaserPanChannel), d.laserPanDeg,
+				d.cfg.PanMinUS, d.cfg.PanMaxUS,
+			); err != nil {
+				log.Printf("control: maestro laser pan: %v", err)
+			}
+			if err := d.maestro.SetServo(
+				uint8(d.cfg.MaestroLaserTiltChannel), d.laserTiltDeg,
+				d.cfg.TiltMinUS, d.cfg.TiltMaxUS,
+			); err != nil {
+				log.Printf("control: maestro laser tilt: %v", err)
+			}
+		case "laser":
+			d.laserOn = c.On
+			if err := d.maestro.SetLaser(uint8(d.cfg.MaestroLaserChannel), d.laserOn); err != nil {
+				log.Printf("control: maestro laser: %v", err)
+			}
+			d.sendStatus()
 		}
-		d.laserOn = c.On
-		if err := d.maestro.SetLaser(uint8(d.cfg.MaestroLaserChannel), d.laserOn); err != nil {
-			log.Printf("control: maestro laser: %v", err)
-		}
-		d.sendStatus()
 	})
 }
 
