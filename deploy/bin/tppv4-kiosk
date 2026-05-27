@@ -20,6 +20,7 @@ fi
 exec /usr/bin/chromium \
   --user-data-dir="$HOME/.config/chromium-tppv4-kiosk" \
   --kiosk \
+  --autoplay-policy=no-user-gesture-required \
   --noerrdialogs \
   --disable-infobars \
   --no-first-run \

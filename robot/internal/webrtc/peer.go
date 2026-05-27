@@ -45,6 +45,8 @@ type DisplayHealth struct {
 	LastICEState          string    `json:"lastIceState,omitempty"`
 	LastVideoEvent        string    `json:"lastVideoEvent,omitempty"`
 	LastVideoPlaying      time.Time `json:"lastVideoPlaying,omitempty"`
+	LastAudioEvent        string    `json:"lastAudioEvent,omitempty"`
+	LastAudioPlaying      time.Time `json:"lastAudioPlaying,omitempty"`
 	LastLogMessage        string    `json:"lastLogMessage,omitempty"`
 	LastError             string    `json:"lastError,omitempty"`
 }
@@ -99,6 +101,7 @@ func New(cfg config.Config, d *control.Dispatcher, mc *media.Controller) *Manage
 			LastPeerState:  "idle",
 			LastICEState:   "new",
 			LastVideoEvent: "idle",
+			LastAudioEvent: "idle",
 		},
 	}
 }
@@ -774,7 +777,18 @@ func (m *Manager) runDisplaySession(conn *websocket.Conn) error {
 			m.updateDisplayHealth(func(h *DisplayHealth) {
 				h.LastLogMessage = msg.Message
 				if idx := strings.Index(msg.Message, "video event: "); idx >= 0 {
-					h.LastVideoEvent = msg.Message[idx+len("video event: "):]
+					evt := msg.Message[idx+len("video event: "):]
+					h.LastVideoEvent = evt
+					if strings.HasPrefix(evt, "playing") {
+						h.LastVideoPlaying = time.Now()
+					}
+				}
+				if idx := strings.Index(msg.Message, "audio event: "); idx >= 0 {
+					evt := msg.Message[idx+len("audio event: "):]
+					h.LastAudioEvent = evt
+					if strings.HasPrefix(evt, "playing") {
+						h.LastAudioPlaying = time.Now()
+					}
 				}
 			})
 			log.Printf("display[browser]: %s", msg.Message)

@@ -32,9 +32,11 @@
 </head>
 <body>
   <video id="pilotVideo" autoplay playsinline muted></video>
+  <audio id="pilotAudio" autoplay></audio>
   <div id="status">Waiting for pilot…</div>
   <script>
     const video  = document.getElementById('pilotVideo');
+    const audio  = document.getElementById('pilotAudio');
     const status = document.getElementById('status');
     const STALL_RELOAD_MS = 60000;
     const CONNECTED_NO_VIDEO_RENEGOTIATE_MS = 8000;
@@ -121,6 +123,16 @@
       });
     }
 
+    // Keep audio diagnostics visible in robot logs for autoplay/output debugging.
+    for (const evt of ['playing', 'pause', 'waiting', 'stalled', 'error']) {
+      audio.addEventListener(evt, () => {
+        const extra = evt === 'error' && audio.error
+          ? ' code=' + audio.error.code + ' msg=' + audio.error.message
+          : '';
+        sendLog('audio event: ' + evt + extra);
+      });
+    }
+
     async function start() {
       status.textContent = 'Connecting…';
       sendLog('start() called — opening WebSocket');
@@ -182,8 +194,9 @@
                 armStallReloadCheck();
                 armConnectedNoVideoRecovery();
               } else if (e.track.kind === 'audio') {
-                const audio = new Audio();
                 audio.srcObject = new MediaStream([e.track]);
+                audio.muted = false;
+                audio.volume = 1.0;
                 audio.play()
                   .then(() => sendLog('audio.play() resolved'))
                   .catch(err => sendLog('audio.play() rejected: ' + err));
@@ -290,6 +303,7 @@
         _ws = null;
         if (pc) { pc.close(); pc = null; }
         video.srcObject = null;
+        audio.srcObject = null;
         setTimeout(start, 1000);
       };
     }
